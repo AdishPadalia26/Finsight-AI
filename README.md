@@ -2,7 +2,7 @@
 
 **Your bank's AI-native wealth intelligence layer — personalized financial guidance at enterprise scale.**
 
-A white-label, multi-agent AI financial intelligence platform built with LangGraph and Claude Sonnet. Deployed by banks and wealth management firms to give every retail customer access to personalized financial analysis — scaling personalized advice from 500 clients per advisor to 50,000.
+A white-label, multi-agent AI financial intelligence platform built with LangGraph and HuggingFace open-source models. 12 AI agents across 3 tiers deliver personalized financial analysis with real-time market data, adversarial stress-testing, and compliance guardrails.
 
 Built for the Wipro Junior FDE Pre-screening Assignment (May 2026).
 
@@ -10,7 +10,10 @@ Built for the Wipro Junior FDE Pre-screening Assignment (May 2026).
 
 ## Live Demo
 
-> URL will be added after deployment
+> Backend: https://finsight-api.your-cloud.run (Cloud Run — always on)
+> Frontend: https://finsight-ai.vercel.app (Vercel — always on)
+>
+> *(URLs will be updated after deployment)*
 
 ---
 
@@ -35,62 +38,73 @@ See `docs/architecture_12_agent.png` for the full diagram.
 | Layer | Technology |
 |---|---|
 | Agent Framework | LangGraph |
-| LLM | Claude Sonnet (`claude-sonnet-4-20250514`) |
-| Backend | FastAPI |
-| Frontend | Streamlit |
-| Live Market Data | Alpha Vantage API + FRED API |
+| LLM | HuggingFace Inference API (Mixtral-8x7B, Llama-3.1-70B, Llama-3.3-70B, Mistral-7B) |
+| Backend | FastAPI + SSE streaming |
+| Frontend | Next.js 14 (TypeScript, Tailwind CSS, recharts) |
+| Live Market Data | yfinance (no API key) + FRED API (free) |
 | Financial Math | numpy-financial |
 | Observability | LangSmith |
-| Deployment | Render |
+| Deployment | Google Cloud Run (backend) + Vercel (frontend) |
 
 ---
 
 ## Setup
 
-### 1. Clone and install
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- HuggingFace account (free) — accept Llama 3 model licenses at huggingface.co/meta-llama
+- FRED API key (free) — fred.stlouisfed.org/docs/api/api_key.html
+- LangSmith API key (free) — smith.langchain.com
+
+### 1. Backend
 
 ```bash
-git clone https://github.com/your-username/finsight-ai
-cd finsight-ai
+git clone https://github.com/AdishPadalia26/Finsight-AI
+cd Finsight-AI/finsight-ai
+
 pip install -r requirements.txt
-```
 
-### 2. Configure environment variables
-
-```bash
 cp .env.example .env
-# Fill in your API keys in .env
+# Edit .env with your real keys
 ```
 
-Required keys:
-- `ANTHROPIC_API_KEY` — get at console.anthropic.com
-- `ALPHA_VANTAGE_API_KEY` — free at alphavantage.co
-- `FRED_API_KEY` — free at fred.stlouisfed.org
-- `LANGSMITH_API_KEY` — free at smith.langchain.com
-
-### 3. Run the backend
+Required keys in `.env`:
+```
+HUGGINGFACE_API_KEY=hf_...
+FRED_API_KEY=...
+LANGSMITH_API_KEY=lsv2_pt_...
+```
 
 ```bash
 uvicorn api.main:app --reload
+# Backend running at http://localhost:8000
+# Docs at http://localhost:8000/docs
 ```
 
-### 4. Run the frontend
+### 2. Frontend
 
 ```bash
-streamlit run frontend/app.py
+cd frontend
+cp .env.local.example .env.local
+# .env.local already has NEXT_PUBLIC_API_URL=http://localhost:8000 for local dev
+
+npm install
+npm run dev
+# Frontend running at http://localhost:3000
 ```
 
 ---
 
 ## Demo Personas
 
-Three pre-loaded financial profiles for live demo:
+Three pre-loaded financial profiles — click the buttons in the UI to load:
 
-| Persona | Age | Income | Situation |
-|---|---|---|---|
-| Alex | 27 | $5,500/mo | Young professional, student loan + credit card debt, saving for a home |
-| Jordan | 42 | $12,000/mo | Mid-career, mortgage, targeting retirement at 60 |
-| Sam | 58 | $18,000/mo | Pre-retirement, conservative, retiring at 65 |
+| Persona | Age | Location | Income | Situation |
+|---|---|---|---|---|
+| Alex | 27 | Austin TX | $5,500/mo | Young professional, student loan + credit card debt, saving for a home |
+| Jordan | 42 | Chicago IL | $12,000/mo | Mid-career, mortgage, targeting retirement at 60 |
+| Sam | 58 | Seattle WA | $18,000/mo | Pre-retirement, conservative, retiring at 65 |
 
 ---
 
@@ -98,11 +112,11 @@ Three pre-loaded financial profiles for live demo:
 
 - **Prompt injection protection** — Profile Builder sanitizes all input before any LLM call
 - **Role constraints** — each agent's system prompt strictly limits its domain
-- **Defense-in-depth** — Investment Strategist scans its own output for ticker slippage
+- **Defense-in-depth** — Investment Strategist scans its own output for ticker slippage before returning
 - **Critic Agent** — adversarially stress-tests the plan across 5 scenarios before delivery
-- **Compliance Gate** — final guardrail: CRITICAL violations hard-stop the pipeline; MODERATE violations are rewritten; all outputs receive regulatory disclaimers
+- **Compliance Gate** — CRITICAL violations hard-stop the pipeline; MODERATE violations are rewritten; all outputs receive jurisdiction-appropriate regulatory disclaimers
 - **PII handling** — income and asset data never written to logs; only anonymized session IDs stored
-- **Audit trail** — every output logged with session ID, timestamp, violations found, and action taken
+- **Audit trail** — every request logged with session ID, timestamp, violations found, and action taken
 
 ---
 
@@ -111,6 +125,38 @@ Three pre-loaded financial profiles for live demo:
 ```bash
 pytest tests/
 ```
+
+---
+
+## Cloud Deployment
+
+**Backend → Google Cloud Run:**
+```bash
+gcloud run deploy finsight-api \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars HUGGINGFACE_API_KEY=...,FRED_API_KEY=...,LANGSMITH_API_KEY=...
+```
+
+**Frontend → Vercel:**
+```bash
+cd frontend && vercel --prod
+# Set NEXT_PUBLIC_API_URL to your Cloud Run URL in Vercel dashboard
+```
+
+---
+
+## API Reference
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/analyze` | Stream agent events via Server-Sent Events |
+| POST | `/analyze/sync` | Blocking analysis — returns full JSON result |
+| GET | `/analyze/demo/{persona}` | Load alex / jordan / sam demo persona |
+| GET | `/health` | Liveness check |
+| GET | `/ready` | Readiness check (verifies API keys present) |
+| GET | `/docs` | Interactive API documentation (Swagger UI) |
 
 ---
 
