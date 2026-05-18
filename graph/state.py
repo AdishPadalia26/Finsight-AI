@@ -16,6 +16,9 @@ class Goal(TypedDict):
 
 
 class FinancialProfile(TypedDict):
+    # Pipeline entry
+    raw_input: Optional[str]        # raw text from user — consumed by Profile Builder only
+
     # Session tracking
     session_id: str
     revision_count: int             # tracks Critic Agent revision loop iterations

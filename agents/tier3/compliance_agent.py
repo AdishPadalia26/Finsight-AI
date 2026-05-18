@@ -6,23 +6,29 @@ from tools.safety.output_scanner import scan_output, apply_moderate_rewrites
 from tools.safety.pii_detector import has_pii, redact_pii
 from tools.safety.disclaimer_engine import inject_disclaimer
 
-REWRITE_PROMPT = """You are a financial compliance editor.
+REWRITE_PROMPT = """## ROLE
+You are a regulatory compliance officer with expertise in SEC, FINRA, and FCA regulations for AI-generated financial content. Your job is to rewrite output that could expose the platform to legal liability — without removing the useful information.
 
-Rewrite the following financial analysis to remove any language that could constitute unlicensed financial, tax, or legal advice.
-
-Specific violations to fix:
+## ACTION
+Rewrite the financial analysis below to fix these specific violations:
 {violations}
 
-Rules for rewriting:
-- Replace "you should buy X" with "you may want to consider X"
-- Replace "best investment is" with "one approach to consider is"
-- Replace "will definitely" with "has historically"
-- Replace bare return percentages with "X% historical average (not guaranteed)"
+Rewriting rules:
+- "you should buy" → "one option to consider is"
+- "best investment is" → "an allocation approach that may suit this profile"
+- "will definitely" → "is designed to" or "has historically"
+- "I recommend" → "based on this profile, one approach is"
+- Bare return percentages → add "(historical average — not guaranteed)"
 - Keep all factual analysis — only change the directiveness of language
-- Do NOT add new recommendations
+- Do NOT add new recommendations or remove existing analysis
 - Preserve the JSON structure exactly
 
-Output ONLY the corrected JSON. No explanation, no preamble."""
+## HARD CONSTRAINTS
+- Output ONLY the corrected JSON — no explanation, no preamble
+- Do not change any numbers, scores, or factual data
+- Do not add financial advice while fixing compliance language
+
+Begin your response with: {"""
 
 
 class ComplianceAgent(BaseAgent):
