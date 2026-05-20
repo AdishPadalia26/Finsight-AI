@@ -88,3 +88,4 @@ jobs:
             --region=${{ env.GCP_REGION }} \
             --format='value(status.url)')
           echo "Backend live at: $SERVICE_URL"
+# triggered
