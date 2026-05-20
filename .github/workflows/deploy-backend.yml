@@ -72,7 +72,7 @@ jobs:
             --set-secrets=LANGCHAIN_API_KEY=LANGCHAIN_API_KEY:latest \
             --set-secrets=LANGCHAIN_PROJECT=LANGCHAIN_PROJECT:latest \
             --set-secrets=LANGCHAIN_TRACING_V2=LANGCHAIN_TRACING_V2:latest \
-            --set-env-vars="ALLOWED_ORIGINS=*,PORT=8080" \
+            --set-env-vars="ALLOWED_ORIGINS=*" \
             --quiet
 
       - name: Get Cloud Run URL
