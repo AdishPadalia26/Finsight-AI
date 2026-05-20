@@ -16,13 +16,9 @@ FROM node:20-slim AS runtime
 
 WORKDIR /app
 
-RUN useradd --create-home --uid 1000 appuser
-
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-
-USER appuser
 
 EXPOSE 3000
 
