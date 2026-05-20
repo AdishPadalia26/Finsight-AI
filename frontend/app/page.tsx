@@ -99,6 +99,19 @@ export default function Home() {
           </span>
         </p>
 
+        <div className="mb-10 grid grid-cols-3 gap-8">
+          {[
+            ["12", "Agents"],
+            ["5", "Scenarios"],
+            ["Live", "Market Data"],
+          ].map(([value, label]) => (
+            <div key={label} className="text-center">
+              <p className="font-jet text-2xl font-bold text-amber-500">{value}</p>
+              <p className="mt-1 text-xs text-gray-600 font-ui">{label}</p>
+            </div>
+          ))}
+        </div>
+
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row gap-3 mb-24">
           <Link
@@ -117,10 +130,11 @@ export default function Home() {
 
         {/* Tier cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl w-full">
-          {TIERS.map((tier) => (
+          {TIERS.map((tier, index) => (
             <div
               key={tier.label}
-              className={`bg-gray-900/50 border ${tier.borderColor} rounded-2xl p-6 text-left backdrop-blur-sm hover:bg-gray-900/80 transition-colors group`}
+              className={`animate-fade-in bg-gray-900/50 border ${tier.borderColor} rounded-2xl p-6 text-left backdrop-blur-sm hover:bg-gray-900/80 transition-colors group`}
+              style={{ animationDelay: `${index * 100}ms` }}
             >
               <div className="flex items-start justify-between mb-4">
                 <span className={`text-2xl ${tier.iconColor}`}>{tier.icon}</span>
@@ -156,7 +170,7 @@ export default function Home() {
 
       {/* Footer strip */}
       <div className="relative z-10 border-t border-gray-800/60 py-6 text-center">
-        <p className="text-xs text-gray-700 font-jet tracking-widest">
+        <p className="text-xs text-gray-600 font-jet tracking-widest">
           WIPRO BFSI CLIENT VERTICAL · MULTI-AGENT ARCHITECTURE · PRODUCTION GRADE
         </p>
       </div>

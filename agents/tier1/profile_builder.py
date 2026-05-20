@@ -84,6 +84,12 @@ class ProfileBuilderAgent(BaseAgent):
     """
 
     MODEL_TYPE = "extraction"
+    PROVIDER = "groq"
+    MODEL_ID = "llama-3.3-70b-versatile"
+    API_KEY_VAR = "GROQ_API_KEY_1"
+    FALLBACK_PROVIDER = "gemini"
+    FALLBACK_MODEL_ID = "gemini-2.5-flash"
+    FALLBACK_API_KEY_VAR = None
 
     def __init__(self):
         super().__init__(name="ProfileBuilderAgent", system_prompt=SYSTEM_PROMPT)
@@ -122,7 +128,7 @@ class ProfileBuilderAgent(BaseAgent):
             "investment_horizon": int(extracted.get("investment_horizon") or 30),
             "session_id":         state.get("session_id") or str(uuid.uuid4()),
             "revision_count":     0,
-            "pipeline_errors":    None,
+            "pipeline_errors":    [],
             # raw_input intentionally not forwarded — consumed here, never passed downstream
         }
 

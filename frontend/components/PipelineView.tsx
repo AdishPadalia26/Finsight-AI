@@ -5,16 +5,16 @@ import type { AgentState } from "@/lib/types";
 const ALL_AGENTS = [
   { key: "profile_builder",       label: "Profile Builder",            tier: 1, built: true },
   { key: "behavioral_pattern",    label: "Behavioral Pattern",         tier: 1, built: true },
-  { key: "credit_intelligence",   label: "Credit Intelligence",        tier: 1, built: false },
+  { key: "credit_intelligence",   label: "Credit Intelligence",        tier: 1, built: true },
   { key: "budget_architect",      label: "Budget Architect",           tier: 2, built: true },
-  { key: "goal_engineering",      label: "Goal Engineering",           tier: 2, built: false },
+  { key: "goal_engineering",      label: "Goal Engineering",           tier: 2, built: true },
   { key: "investment_strategist", label: "Investment Strategist",      tier: 2, built: true },
-  { key: "tax_intelligence",      label: "Tax Intelligence",           tier: 2, built: false },
-  { key: "debt_elimination",      label: "Debt Elimination",           tier: 2, built: false },
-  { key: "life_event",            label: "Life Event Anticipation",    tier: 2, built: false },
+  { key: "tax_intelligence",      label: "Tax Intelligence",           tier: 2, built: true },
+  { key: "debt_elimination",      label: "Debt Elimination",           tier: 2, built: true },
+  { key: "life_event",            label: "Life Event Anticipation",    tier: 3, built: true },
+  { key: "personalised_advisor",  label: "Personalised Advisor",       tier: 3, built: true },
   { key: "critic",                label: "Critic / Red Team",          tier: 3, built: true },
   { key: "compliance",            label: "Compliance Gate",            tier: 3, built: true },
-  { key: "memory",                label: "Memory Agent",               tier: 3, built: false },
 ];
 
 interface Props {
@@ -22,14 +22,7 @@ interface Props {
   revisionCount?: number;
 }
 
-function StatusIcon({ status, built }: { status: string; built: boolean }) {
-  if (!built) {
-    return (
-      <span className="w-5 h-5 rounded-full border border-slate-600 flex items-center justify-center text-slate-500 text-[10px]">
-        S
-      </span>
-    );
-  }
+function StatusIcon({ status }: { status: string }) {
   if (status === "running") {
     return (
       <span className="w-5 h-5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin inline-block" />
@@ -99,12 +92,9 @@ export default function PipelineView({ agents, revisionCount = 0 }: Props) {
                           : "border-slate-800 bg-slate-800/50"
                       }`}
                     >
-                      <StatusIcon status={status} built={agent.built} />
+                      <StatusIcon status={status} />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-white truncate">{agent.label}</p>
-                        {!agent.built && (
-                          <p className="text-[10px] text-slate-500">Phase 2 stub</p>
-                        )}
                         {isRunning && (
                           <p className="text-[10px] text-indigo-400 animate-pulse">running…</p>
                         )}
@@ -128,9 +118,7 @@ function AgentSummary({ summary }: { summary: Record<string, unknown> }) {
   const entries = Object.entries(summary)
     .filter(([, v]) => v !== null && v !== undefined)
     .slice(0, 2);
-
   if (!entries.length) return null;
-
   return (
     <p className="text-[10px] text-slate-400 truncate">
       {entries.map(([k, v]) => `${k}: ${v}`).join(" · ")}

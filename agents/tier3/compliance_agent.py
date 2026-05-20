@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from graph.nodes import BaseAgent
 from tools.safety.output_scanner import scan_output, apply_moderate_rewrites
 from tools.safety.pii_detector import has_pii, redact_pii
-from tools.safety.disclaimer_engine import inject_disclaimer
+from tools.safety.disclaimer_engine import inject_disclaimer, get_disclaimer, detect_jurisdiction
 
 REWRITE_PROMPT = """## ROLE
 You are a regulatory compliance officer with expertise in SEC, FINRA, and FCA regulations for AI-generated financial content. Your job is to rewrite output that could expose the platform to legal liability — without removing the useful information.
@@ -50,6 +50,12 @@ class ComplianceAgent(BaseAgent):
     """
 
     MODEL_TYPE = "compliance"
+    PROVIDER = "groq"
+    MODEL_ID = "llama-3.3-70b-versatile"
+    API_KEY_VAR = "GROQ_API_KEY_3"
+    FALLBACK_PROVIDER = "gemini"
+    FALLBACK_MODEL_ID = "gemini-2.5-flash"
+    FALLBACK_API_KEY_VAR = None
     _audit_log: list = []  # in-memory audit trail for demo session
 
     def __init__(self):
@@ -102,6 +108,15 @@ class ComplianceAgent(BaseAgent):
         # ── Step 4: Log audit trail ────────────────────────────────────────
         audit_entry = self._log_audit(session_id, action, scan, final_text)
 
+        rewrite_actions = (
+            [f"Rewrote: {v.get('type', 'violation')} — '{v.get('matched_text', '')}'"
+             for v in scan["violations"]]
+            if action in ("REWRITTEN", "REWRITTEN_AND_APPROVED")
+            else []
+        )
+        jurisdiction = detect_jurisdiction(location) if location else "US"
+        disclaimer_text = get_disclaimer(jurisdiction).strip()
+
         return {
             **state,
             "final_report": json.loads(combined_text) if self._is_valid_json(combined_text) else combined_text,
@@ -109,8 +124,10 @@ class ComplianceAgent(BaseAgent):
                 "audit_id": audit_entry["audit_id"],
                 "action": action,
                 "violations_found": scan["violations"],
+                "actions_taken": rewrite_actions,
                 "timestamp": audit_entry["timestamp"],
                 "disclaimer_injected": True,
+                "disclaimer": disclaimer_text,
             },
         }
 

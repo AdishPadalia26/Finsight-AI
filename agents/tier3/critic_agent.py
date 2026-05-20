@@ -37,6 +37,10 @@ You receive the full combined output of budget_architect, investment_strategist,
 2. How many months until the user runs out of money or defaults?
 3. What is the minimum change to the budget or investment plan that fixes this?
 
+## OUTPUT FORMAT
+You MUST respond with ONLY a valid JSON object. No markdown, no bold text, no bullet points, no explanations outside the JSON.
+Your entire response must be parseable by json.loads(). Do not include any text before or after the JSON object.
+
 Begin your response with: {"""
 
 
@@ -55,6 +59,13 @@ class CriticAgent(BaseAgent):
     """
 
     MODEL_TYPE = "adversarial"
+    PROVIDER = "gemini"
+    MODEL_ID = "gemini-2.0-flash"
+    API_KEY_VAR = None
+    FALLBACK_PROVIDER = "groq"
+    FALLBACK_MODEL_ID = "llama-3.3-70b-versatile"
+    FALLBACK_API_KEY_VAR = "GROQ_API_KEY_1"
+    MAX_TOKENS = 2048  # critic output is structured JSON — keep concise
 
     def __init__(self):
         super().__init__(name="CriticAgent", system_prompt=SYSTEM_PROMPT)
@@ -91,7 +102,18 @@ class CriticAgent(BaseAgent):
             "revision_count": revision_count,
         }
 
-        result = self._call_llm_json(json.dumps(combined_plan))
+        try:
+            result = self._call_llm_json(json.dumps(combined_plan))
+        except (RuntimeError, ValueError) as e:
+            print(f"[Critic] LLM unavailable — accepting plan with caveat: {e}")
+            result = {
+                "status": "ACCEPTED_WITH_CAVEATS",
+                "overall_score": 70,
+                "critique": "LLM critic unavailable — plan accepted without adversarial review.",
+                "flags": [],
+                "revision_needed": False,
+            }
+
         result["revision_count"] = revision_count
 
         return {**state, "critic_scores": result}

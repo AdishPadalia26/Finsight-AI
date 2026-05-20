@@ -1,6 +1,7 @@
 "use client";
 
 import { ShieldCheck, RefreshCw, AlertTriangle } from "lucide-react";
+import { displayText } from "@/lib/display";
 
 interface Props {
   scores: Record<string, unknown>;
@@ -83,10 +84,27 @@ export default function StressTestDashboard({ scores }: Props) {
     );
   }
 
-  const scenarioScores = (scores.scores as Record<string, number>) ?? {};
-  const status = (scores.status as string) ?? "";
+  // Handle both canonical stress_tests format and legacy critic_scores format
+  const canonicalScenarios = scores.scenarios as Record<string, Record<string, unknown>> | undefined;
+  const canonicalSummary   = scores.summary   as Record<string, unknown> | undefined;
+
+  let scenarioScores: Record<string, number> = {};
+  if (canonicalScenarios) {
+    // New format: {scenarios: {JOB_LOSS: {score: 7, ...}}}
+    for (const [key, val] of Object.entries(canonicalScenarios)) {
+      if (typeof val === "object" && val !== null) {
+        scenarioScores[key] = Number((val as Record<string, unknown>).score ?? 0);
+      }
+    }
+  } else {
+    // Legacy critic format: {scores: {JOB_LOSS: 7, ...}}
+    scenarioScores = (scores.scores as Record<string, number>) ?? {};
+  }
+
+  const status = String(scores.status ?? canonicalSummary?.overall_resilience ?? "");
   const iterations = (scores.iterations as number) ?? 1;
-  const vulnerabilities = (scores.vulnerabilities as string[]) ?? [];
+  const vulnsRaw = scores.vulnerabilities;
+  const vulnerabilities: unknown[] = Array.isArray(vulnsRaw) ? vulnsRaw : [];
 
   const isApproved = status.includes("APPROVED");
   const wasRevised = status.includes("REVISED") || iterations > 1;
@@ -157,6 +175,24 @@ export default function StressTestDashboard({ scores }: Props) {
         </div>
       )}
 
+      {/* Summary from canonical format */}
+      {canonicalSummary && (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3 text-center">
+            <p className="text-[9px] font-jet text-gray-600 mb-1">OVERALL</p>
+            <p className="text-sm font-jet text-white">{String(canonicalSummary.overall_resilience ?? "—")}</p>
+          </div>
+          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3 text-center">
+            <p className="text-[9px] font-jet text-gray-600 mb-1">AVG SCORE</p>
+            <p className="text-sm font-jet text-white">{Number(canonicalSummary.average_score ?? 0).toFixed(1)}/10</p>
+          </div>
+          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3 text-center">
+            <p className="text-[9px] font-jet text-gray-600 mb-1">WEAKEST</p>
+            <p className="text-xs font-jet text-red-400">{String(canonicalSummary.weakest_scenario ?? "—").replace("_", " ")}</p>
+          </div>
+        </div>
+      )}
+
       {/* Scenario cards */}
       {Object.keys(scenarioScores).length > 0 && (
         <div>
@@ -194,7 +230,7 @@ export default function StressTestDashboard({ scores }: Props) {
             {vulnerabilities.slice(0, 4).map((v, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-gray-400 font-ui">
                 <span className="text-amber-500 shrink-0 mt-0.5">·</span>
-                {v}
+                {displayText(v)}
               </li>
             ))}
           </ul>

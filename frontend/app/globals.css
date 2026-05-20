@@ -28,6 +28,12 @@
   .animate-count-up {
     animation: count-up 0.8s ease-out forwards;
   }
+  .animate-agent-glow {
+    animation: agent-glow 1.5s ease-in-out infinite;
+  }
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
 }
 
 @keyframes pulse-ring {
@@ -70,6 +76,17 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.progress-ring-circle {
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+@keyframes agent-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
 }
 
 /* Slider styling */

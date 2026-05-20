@@ -50,6 +50,12 @@ class BehavioralPatternAgent(BaseAgent):
     """
 
     MODEL_TYPE = "analysis"
+    PROVIDER = "groq"
+    MODEL_ID = "llama-3.3-70b-versatile"
+    API_KEY_VAR = "GROQ_API_KEY_2"
+    FALLBACK_PROVIDER = "gemini"
+    FALLBACK_MODEL_ID = "gemini-2.5-flash"
+    FALLBACK_API_KEY_VAR = None
 
     # Industry benchmark spending percentages of gross income
     _BENCHMARKS = {
@@ -64,7 +70,17 @@ class BehavioralPatternAgent(BaseAgent):
     def run(self, state: dict) -> dict:
         transactions = self._generate_mock_transactions(state)
         profile_summary = self._build_prompt(state, transactions)
-        result = self._call_llm_json(profile_summary)
+        try:
+            result = self._call_llm_json(profile_summary)
+        except (RuntimeError, ValueError) as e:
+            print(f"[BehavioralPattern] LLM unavailable — using fallback: {e}")
+            result = {
+                "discipline_score": 50,
+                "key_insight": "LLM analysis unavailable — behavioral scoring skipped.",
+                "categories": {},
+                "anomalies": [],
+                "subscription_creep": False,
+            }
 
         return {**state, "behavioral_fingerprint": result}
 

@@ -1,18 +1,14 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  async headers() {
-    return [
-      {
-        source: "/(.*)",
-        headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-        ],
-      },
-    ];
+  output: 'export',        // Static HTML export for S3 + CloudFront
+  trailingSlash: true,     // S3 serves /about/ → about/index.html
+  images: {
+    unoptimized: true,     // S3 can't run Next.js image optimization server
   },
-};
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? '',
+  },
+}
 
-export default nextConfig;
+export default nextConfig

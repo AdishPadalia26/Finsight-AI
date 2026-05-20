@@ -31,7 +31,7 @@ const ALL_AGENTS: AgentDef[] = [
     label: "Credit Intelligence",
     description: "Credit bureau · Score optimization",
     tier: 1,
-    built: false,
+    built: true,
   },
   {
     key: "budget_architect",
@@ -43,9 +43,9 @@ const ALL_AGENTS: AgentDef[] = [
   {
     key: "goal_engineering",
     label: "Goal Engineering",
-    description: "Monte Carlo goal simulation",
+    description: "Goal feasibility · Milestone projections",
     tier: 2,
-    built: false,
+    built: true,
   },
   {
     key: "investment_strategist",
@@ -57,28 +57,42 @@ const ALL_AGENTS: AgentDef[] = [
   {
     key: "tax_intelligence",
     label: "Tax Intelligence",
-    description: "Year-round tax optimization",
+    description: "2025 IRS limits · Bracket optimization",
     tier: 2,
-    built: false,
+    built: true,
   },
   {
     key: "debt_elimination",
     label: "Debt Elimination",
-    description: "Avalanche · Snowball strategy",
+    description: "Avalanche · Snowball · Interest saved",
     tier: 2,
-    built: false,
+    built: true,
   },
   {
     key: "life_event",
     label: "Life Event Anticipation",
     description: "Proactive life change detection",
     tier: 3,
-    built: false,
+    built: true,
+  },
+  {
+    key: "stress_test",
+    label: "Stress Test Engine",
+    description: "Job loss · Market crash · Rate spike",
+    tier: 3,
+    built: true,
+  },
+  {
+    key: "personalised_advisor",
+    label: "Personalised Advisor",
+    description: "Cross-domain synthesis · 30-day plan",
+    tier: 3,
+    built: true,
   },
   {
     key: "critic",
     label: "Critic (Red Team)",
-    description: "5-scenario adversarial stress test",
+    description: "Adversarial review · Revision loop",
     tier: 3,
     built: true,
   },
@@ -94,7 +108,7 @@ const ALL_AGENTS: AgentDef[] = [
     label: "Memory Agent",
     description: "Longitudinal session learning",
     tier: 3,
-    built: false,
+    built: true,
   },
 ];
 
@@ -119,7 +133,7 @@ function StatusDot({ status, built }: { status: string; built: boolean }) {
   }
   if (status === "running") {
     return (
-      <div className="w-6 h-6 rounded-full border-2 border-amber-500 flex items-center justify-center shrink-0 animate-pulse-ring">
+      <div className="w-6 h-6 rounded-full border-2 border-amber-500 flex items-center justify-center shrink-0 animate-agent-glow">
         <Loader2 size={12} className="text-amber-500 animate-spin" />
       </div>
     );
@@ -151,15 +165,15 @@ function AgentRow({ agent, state }: { agent: AgentDef; state?: AgentState }) {
   const isComplete = status === "complete";
   const tier = TIER_CONFIG[agent.tier];
 
-  const firstSummaryEntry = state?.summary
-    ? Object.entries(state.summary).find(([, v]) => v != null && typeof v !== "object")
-    : null;
+  const summaryEntries = state?.summary
+    ? Object.entries(state.summary).filter(([, v]) => v != null && typeof v !== "object").slice(0, 3)
+    : [];
 
   return (
     <div
       className={`flex items-start gap-3 rounded-xl px-3 py-2.5 border-l-2 transition-all ${
         isRunning
-          ? `${tier.border} ${tier.bg} border border-r-0 border-t-0 border-b-0`
+          ? "border-l-amber-500/40 bg-amber-500/5 border border-r-0 border-t-0 border-b-0"
           : isComplete
           ? `${tier.border} border border-r-0 border-t-0 border-b-0 border-gray-800/40`
           : "border-gray-800/0 border border-r-0 border-t-0 border-b-0"
@@ -172,16 +186,12 @@ function AgentRow({ agent, state }: { agent: AgentDef; state?: AgentState }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span
             className={`text-xs font-semibold font-ui ${
-              isRunning ? "text-white" : isComplete ? "text-gray-200" : "text-gray-400"
+            isRunning ? "text-white" : isComplete ? "text-gray-200" : "text-gray-400"
+            } ${!agent.built ? "text-slate-600" : ""
             }`}
           >
             {agent.label}
           </span>
-          {!agent.built && (
-            <span className="text-[9px] font-jet text-amber-600 bg-amber-500/8 border border-amber-500/15 rounded px-1.5 py-0.5">
-              PHASE 2
-            </span>
-          )}
           {isRunning && (
             <span className="text-[9px] font-jet text-amber-400 animate-pulse">
               running…
@@ -189,12 +199,16 @@ function AgentRow({ agent, state }: { agent: AgentDef; state?: AgentState }) {
           )}
         </div>
         <p className="text-[10px] text-gray-600 mt-0.5 font-ui">{agent.description}</p>
-        {isComplete && firstSummaryEntry && (
-          <div className="animate-slide-down mt-1">
-            <p className="text-[10px] font-jet text-cyan-500/80 truncate">
-              {String(firstSummaryEntry[0]).replace(/_/g, " ")}:{" "}
-              {String(firstSummaryEntry[1])}
-            </p>
+        {isComplete && summaryEntries.length > 0 && (
+          <div className="animate-slide-down mt-2 flex flex-wrap gap-1.5">
+            {summaryEntries.map(([key, value]) => (
+              <span
+                key={key}
+                className="max-w-full truncate rounded-full border border-amber-500/15 bg-amber-500/8 px-2 py-0.5 text-[9px] font-jet text-amber-300/90"
+              >
+                {key.replace(/_/g, " ")}: {String(value)}
+              </span>
+            ))}
           </div>
         )}
       </div>
@@ -206,7 +220,6 @@ export default function AgentPipeline({ agents, revisionCount = 0 }: Props) {
   const completedCount = ALL_AGENTS.filter(
     (a) => agents[a.key]?.status === "complete"
   ).length;
-  const builtCount = ALL_AGENTS.filter((a) => a.built).length;
 
   return (
     <div className="bg-gray-900/60 border border-gray-800 rounded-2xl overflow-hidden">
@@ -215,7 +228,7 @@ export default function AgentPipeline({ agents, revisionCount = 0 }: Props) {
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold text-white font-ui">Agent Pipeline</h2>
           <div className="text-[10px] font-jet text-gray-600">
-            {completedCount}/{builtCount} built
+            {completedCount}/{ALL_AGENTS.length} agents
           </div>
         </div>
         {revisionCount > 0 && (
@@ -234,7 +247,10 @@ export default function AgentPipeline({ agents, revisionCount = 0 }: Props) {
           );
 
           return (
-            <div key={tier}>
+            <div key={tier} className="relative pl-4">
+              {tier < 3 && (
+                <div className="absolute left-0 top-8 h-[calc(100%+1.25rem)] border-l border-dashed border-slate-700" />
+              )}
               <div className="flex items-center gap-2 mb-2">
                 <p
                   className={`text-[10px] font-jet tracking-widest ${config.header}`}

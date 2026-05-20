@@ -63,7 +63,7 @@ export default function ExplainabilityPanel({ agents }: Props) {
       >
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-white font-ui">
-            Agent Reasoning Trace
+            {isOpen ? "▾ Agent Trace" : "▸ Agent Trace"}
           </span>
           <span className="text-[10px] font-jet text-gray-600">
             {completed.length} agents
@@ -77,7 +77,7 @@ export default function ExplainabilityPanel({ agents }: Props) {
       </button>
 
       {isOpen && (
-        <div className="bg-gray-900/40 border border-t-0 border-gray-800 rounded-b-2xl p-4 space-y-2">
+        <div className="animate-slide-down bg-gray-900/40 border border-t-0 border-gray-800 rounded-b-2xl p-4 space-y-2">
           {completed.map(([key, state]) => {
             const tier = AGENT_TIER[key] ?? "—";
             const tierColor = TIER_COLOR[tier] ?? "text-gray-400";
@@ -94,7 +94,7 @@ export default function ExplainabilityPanel({ agents }: Props) {
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                    <span className="text-xs font-semibold text-white font-ui">
+                    <span className="text-xs font-semibold text-amber-300 font-ui">
                       {state.label}
                     </span>
                     <span className={`text-[9px] font-jet ${tierColor}`}>{tier}</span>
@@ -113,6 +113,11 @@ export default function ExplainabilityPanel({ agents }: Props) {
                         {summaryEntries.map(([k, v]) => (
                           <SummaryEntry key={k} k={k} v={v} />
                         ))}
+                        {summaryEntries.find(([k]) => k === "audit_id") && (
+                          <p className="text-[10px] font-jet text-gray-600">
+                            audit: {String(summaryEntries.find(([k]) => k === "audit_id")?.[1])}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <p className="text-xs text-gray-600 font-ui pt-3">

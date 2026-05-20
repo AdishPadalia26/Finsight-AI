@@ -6,8 +6,8 @@ import {
   Cell,
   ResponsiveContainer,
   Tooltip,
-  Legend,
 } from "recharts";
+import { displayText } from "@/lib/display";
 
 interface Props {
   investment: Record<string, unknown>;
@@ -50,9 +50,17 @@ export default function InvestmentDashboard({ investment }: Props) {
   }
 
   const allocation = (investment.allocation as Record<string, number>) ?? {};
-  const riskAlignment = (investment.risk_alignment as string) ?? "—";
-  const rationale = (investment.rationale as string) ?? "";
-  const accountOptimization = (investment.account_optimization as string) ?? "";
+  const riskAlignment = String(investment.risk_alignment ?? "—");
+  const riskText = riskAlignment.toLowerCase();
+  const riskLabel = riskText.includes("conservative")
+    ? "conservative"
+    : riskText.includes("aggressive")
+    ? "aggressive"
+    : riskText.includes("moderate")
+    ? "moderate"
+    : riskAlignment;
+  const rationale = displayText(investment.rationale) || "";
+  const accountOptimization = displayText(investment.account_optimization) || "";
   const marketContext = (investment.market_context as Record<string, unknown>) ?? {};
 
   const pieData = Object.entries(allocation)
@@ -65,9 +73,9 @@ export default function InvestmentDashboard({ investment }: Props) {
   const totalPct = pieData.reduce((s, d) => s + d.value, 0);
 
   const riskColor =
-    riskAlignment.toLowerCase() === "conservative"
+    riskLabel === "conservative"
       ? "text-blue-400 bg-blue-500/10 border-blue-500/20"
-      : riskAlignment.toLowerCase() === "aggressive"
+      : riskLabel === "aggressive"
       ? "text-red-400 bg-red-500/10 border-red-500/20"
       : "text-amber-400 bg-amber-500/10 border-amber-500/20";
 
@@ -81,7 +89,7 @@ export default function InvestmentDashboard({ investment }: Props) {
         <span
           className={`text-[10px] font-jet px-2 py-0.5 rounded border capitalize ${riskColor}`}
         >
-          {riskAlignment}
+          {riskLabel}
         </span>
       </div>
 
@@ -148,35 +156,77 @@ export default function InvestmentDashboard({ investment }: Props) {
       {marketContext && Object.keys(marketContext).length > 0 && (
         <div>
           <p className="text-[9px] font-jet text-gray-600 tracking-widest mb-3">
-            LIVE MARKET CONTEXT
+            LIVE MARKET DATA
           </p>
           <div className="grid grid-cols-2 gap-2">
-            {(marketContext.fed_funds_rate as number) != null && (
+            {(marketContext.sp500_price as number) != null && (
+              <MarketBadge
+                label="S&P 500 (SPY)"
+                value={`$${Number(marketContext.sp500_price).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+                context={marketContext.sp500_ytd_return != null ? `YTD: ${Number(marketContext.sp500_ytd_return).toFixed(1)}%` : "Real-time via yfinance"}
+              />
+            )}
+            {(marketContext.intl_equity_ytd as number) != null && (
+              <MarketBadge
+                label="INTL EQUITY (VXUS) YTD"
+                value={`${Number(marketContext.intl_equity_ytd).toFixed(1)}%`}
+                context="International diversification"
+              />
+            )}
+            {(marketContext.gold_price as number) != null && (
+              <MarketBadge
+                label="GOLD (GLD)"
+                value={`$${Number(marketContext.gold_price).toFixed(0)}`}
+                context={marketContext.gold_ytd_return != null ? `YTD: ${Number(marketContext.gold_ytd_return).toFixed(1)}%` : "Safe haven"}
+              />
+            )}
+            {(marketContext.reit_ytd as number) != null && (
+              <MarketBadge
+                label="REITS (VNQ) YTD"
+                value={`${Number(marketContext.reit_ytd).toFixed(1)}%`}
+                context="Real estate exposure"
+              />
+            )}
+            {(marketContext.fed_funds_rate_pct as number) != null && (
               <MarketBadge
                 label="FED FUNDS RATE"
-                value={`${(marketContext.fed_funds_rate as number).toFixed(2)}%`}
+                value={`${Number(marketContext.fed_funds_rate_pct).toFixed(2)}%`}
                 context="Current rate environment"
               />
             )}
-            {(marketContext.inflation_rate as number) != null && (
+            {(marketContext.inflation_rate_pct as number) != null && (
               <MarketBadge
                 label="CPI INFLATION"
-                value={`${(marketContext.inflation_rate as number).toFixed(1)}%`}
+                value={`${Number(marketContext.inflation_rate_pct).toFixed(1)}%`}
                 context="Year-over-year"
               />
             )}
-            {(marketContext.treasury_10yr as number) != null && (
+            {(marketContext.treasury_10yr_pct as number) != null && (
               <MarketBadge
                 label="10-YR TREASURY"
-                value={`${(marketContext.treasury_10yr as number).toFixed(2)}%`}
+                value={`${Number(marketContext.treasury_10yr_pct).toFixed(2)}%`}
                 context="Risk-free rate benchmark"
               />
             )}
-            {(marketContext.sp500_price as number) != null && (
+            {(marketContext.treasury_3mo_pct as number) != null && (
               <MarketBadge
-                label="S&P 500"
-                value={`$${(marketContext.sp500_price as number).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
-                context="Real-time via yfinance"
+                label="3-MO T-BILL"
+                value={`${Number(marketContext.treasury_3mo_pct).toFixed(2)}%`}
+                context="Short-duration safe yield"
+              />
+            )}
+            {(marketContext.vix as number) != null && (
+              <MarketBadge
+                label="VIX"
+                value={`${Number(marketContext.vix).toFixed(1)}`}
+                context={Number(marketContext.vix) > 25 ? "Elevated fear" : "Low volatility regime"}
+              />
+            )}
+            {(marketContext.corporate_spread_pct as number) != null && (
+              <MarketBadge
+                label="BBB CORP SPREAD"
+                value={`${Number(marketContext.corporate_spread_pct).toFixed(2)}%`}
+                context="Credit risk premium"
               />
             )}
           </div>
@@ -191,6 +241,17 @@ export default function InvestmentDashboard({ investment }: Props) {
           </p>
           <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
             <p className="text-xs text-gray-400 leading-relaxed font-ui">{rationale}</p>
+          </div>
+        </div>
+      )}
+
+      {riskAlignment && riskAlignment !== riskLabel && (
+        <div>
+          <p className="text-[9px] font-jet text-gray-600 tracking-widest mb-2">
+            RISK NOTE
+          </p>
+          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-3">
+            <p className="text-xs text-gray-400 leading-relaxed font-ui">{riskAlignment}</p>
           </div>
         </div>
       )}

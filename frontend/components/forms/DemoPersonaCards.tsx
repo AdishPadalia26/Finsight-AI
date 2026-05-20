@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { User, CheckCircle, Loader2 } from "lucide-react";
@@ -20,11 +20,11 @@ const PERSONAS = [
   },
   {
     id: "jordan" as const,
-    name: "Jordan Kim",
-    age: 42,
-    location: "Chicago, IL",
-    income: "$12,000/mo",
-    tagline: "Mid-career · Mortgage · Retiring at 60",
+    name: "Jordan Chen",
+    age: 29,
+    location: "San Francisco, CA",
+    income: "$9,500/mo",
+    tagline: "Bay Area professional - Student debt - Down payment goal",
     initial: "J",
     color: "from-amber-500/20 to-orange-500/20",
     border: "border-amber-500/30",
@@ -62,7 +62,7 @@ export default function DemoPersonaCards({ onLoad, activePersona, disabled }: Pr
       const data = await fetchDemoPersona(id);
       onLoad(data.profile ?? data, id);
     } catch {
-      // silently fail — user can still fill the form manually
+      // silently fail â€” user can still fill the form manually
     } finally {
       setLoading(null);
     }
@@ -123,3 +123,4 @@ export default function DemoPersonaCards({ onLoad, activePersona, disabled }: Pr
     </div>
   );
 }
+

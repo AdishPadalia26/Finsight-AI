@@ -3,7 +3,7 @@
 
 POST /analyze          — streams agent events as SSE, then final report
 POST /analyze/sync     — blocking version, returns full result as JSON (for testing)
-GET  /analyze/demo/{persona} — returns pre-loaded persona profile for the frontend
+GET  /analyze/demo/{persona} — returns pre-loaded demo persona profile for the frontend
 """
 
 import json
@@ -21,15 +21,11 @@ from api.middleware.audit_logger import log_request
 
 router = APIRouter()
 
+GRAPH_CONFIG = {"recursion_limit": 100}
+
 # ── Request / Response models ─────────────────────────────────────────────────
 
 class AnalyzeRequest(BaseModel):
-    """
-    Two input modes:
-    1. raw_input — free text from the form (Profile Builder agent extracts the data)
-    2. profile   — pre-structured dict (used when loading a demo persona)
-    Exactly one must be provided.
-    """
     raw_input: Optional[str] = Field(None, description="Free-text financial description")
     profile:   Optional[dict] = Field(None, description="Pre-structured FinancialProfile dict")
     session_id: Optional[str] = Field(None, description="Optional session ID; generated if not provided")
@@ -46,37 +42,30 @@ class SyncAnalyzeResponse(BaseModel):
 # ── SSE helpers ───────────────────────────────────────────────────────────────
 
 def _sse(data: dict) -> str:
-    """Format a dict as a Server-Sent Event line."""
     return f"data: {json.dumps(data)}\n\n"
 
 
 def _build_initial_state(request: AnalyzeRequest) -> dict:
-    """Build the initial LangGraph state from the request."""
     session_id = request.session_id or str(uuid.uuid4())
-
     if request.profile:
-        # Pre-structured profile (demo persona or frontend form)
-        state = {**request.profile, "session_id": session_id, "revision_count": 0, "pipeline_errors": None}
+        state = {**request.profile, "session_id": session_id, "revision_count": 0, "pipeline_errors": []}
     elif request.raw_input:
-        # Free text — Profile Builder agent will extract the profile
         state = {
             "raw_input": request.raw_input,
             "session_id": session_id,
             "revision_count": 0,
-            "pipeline_errors": None,
+            "pipeline_errors": [],
         }
     else:
         raise HTTPException(status_code=422, detail="Provide either raw_input or profile.")
-
     return state
 
 
-# Agent display names shown in the frontend pipeline view
 _AGENT_LABELS = {
     "profile_builder":       "Profile Builder",
     "behavioral_pattern":    "Behavioral Pattern Analyzer",
     "credit_intelligence":   "Credit Intelligence",
-    "tier1_join":            None,   # internal sync node — don't surface to UI
+    "tier1_join":            None,
     "tier2_entry":           None,
     "tier2_join":            None,
     "budget_architect":      "Budget Architect",
@@ -85,8 +74,11 @@ _AGENT_LABELS = {
     "tax_intelligence":      "Tax Intelligence",
     "debt_elimination":      "Debt Elimination",
     "life_event":            "Life Event Anticipation",
+    "stress_test":           None,   # internal deterministic — don't surface separately
+    "personalised_advisor":  "Personalised Advisor",
     "critic":                "Critic / Red Team",
     "compliance":            "Compliance Gate",
+    "final_report_assembler": None,  # internal assembler
     "memory":                "Memory Agent",
 }
 
@@ -96,35 +88,80 @@ _AGENT_LABELS = {
 @router.post("")
 async def analyze_stream(request: AnalyzeRequest):
     """
-    Runs the full 12-agent FinSight AI pipeline and streams each agent's
-    completion event as a Server-Sent Event.
+    Runs the full FinSight AI pipeline and streams each agent's completion event
+    as Server-Sent Events. The final state is captured from the stream itself —
+    the pipeline runs exactly once.
 
     SSE event types:
-      pipeline_start   — pipeline has begun
-      agent_start      — an agent node has started
-      agent_complete   — an agent node has finished (includes partial output)
-      revision_loop    — Critic triggered a revision back to Tier 2
-      pipeline_complete — all agents done, full final_report included
-      pipeline_error   — critical error (e.g. injection detected, compliance violation)
+      pipeline_start    — pipeline has begun
+      agent_start       — an agent node has started
+      agent_complete    — an agent node has finished (includes safe summary)
+      revision_loop     — Critic triggered a revision back to Tier 2
+      pipeline_complete — all agents done, canonical final_report included
+      pipeline_error    — critical error (injection detected, compliance violation)
     """
     initial_state = _build_initial_state(request)
     session_id = initial_state["session_id"]
     log_request(session_id, "stream")
 
     async def event_stream():
-        yield _sse({"event": "pipeline_start", "session_id": session_id,
-                    "total_agents": 12, "built_agents": 6})
+        yield _sse({
+            "event": "pipeline_start",
+            "session_id": session_id,
+            "total_agents": 12,
+            "built_agents": 12,
+        })
+
+        # Accumulate state as each node completes — avoids double pipeline execution
+        state_accumulator: dict = dict(initial_state)
+
         try:
-            async for event in graph_app.astream_events(initial_state, version="v2"):
+            async for event in graph_app.astream_events(
+                initial_state,
+                config=GRAPH_CONFIG,
+                version="v2",
+            ):
                 event_type = event.get("event", "")
                 node_name  = event.get("name", "")
                 label      = _AGENT_LABELS.get(node_name)
 
-                # Skip internal sync nodes and non-node events
-                if label is None:
-                    continue
+                if event_type == "on_chain_end":
+                    output = event.get("data", {}).get("output", {})
+                    if isinstance(output, dict):
+                        # Merge delta into accumulated state (handle pipeline_errors reducer)
+                        for k, v in output.items():
+                            if k == "pipeline_errors" and isinstance(v, list):
+                                existing = list(state_accumulator.get("pipeline_errors") or [])
+                                state_accumulator["pipeline_errors"] = existing + v
+                            else:
+                                state_accumulator[k] = v
 
-                if event_type == "on_chain_start":
+                    # Surface revision loop event
+                    if node_name == "tier2_entry" and isinstance(output, dict):
+                        revision = output.get("revision_count", 0)
+                        if revision > 0:
+                            yield _sse({
+                                "event":           "revision_loop",
+                                "revision_number":  revision,
+                                "message":         f"Critic requested revision #{revision} — re-running planning agents",
+                            })
+                        continue
+
+                    if label is None:
+                        continue
+
+                    safe_output = _safe_output_summary(node_name, output)
+                    yield _sse({
+                        "event":   "agent_complete",
+                        "agent":   node_name,
+                        "label":   label,
+                        "status":  "complete",
+                        "summary": safe_output,
+                    })
+
+                elif event_type == "on_chain_start":
+                    if label is None:
+                        continue
                     yield _sse({
                         "event":  "agent_start",
                         "agent":  node_name,
@@ -132,75 +169,50 @@ async def analyze_stream(request: AnalyzeRequest):
                         "status": "running",
                     })
 
-                elif event_type == "on_chain_end":
-                    output = event.get("data", {}).get("output", {})
-
-                    # Detect revision loop (Tier 2 re-entry after Critic)
-                    if node_name == "tier2_entry" and isinstance(output, dict):
-                        revision = output.get("revision_count", 0)
-                        if revision > 0:
-                            yield _sse({
-                                "event":          "revision_loop",
-                                "revision_number": revision,
-                                "message":        f"Critic requested revision #{revision} — re-running planning agents",
-                            })
-                        continue
-
-                    # Surface safe summary fields only — never stream raw financial data
-                    safe_output = _safe_output_summary(node_name, output)
-                    yield _sse({
-                        "event":  "agent_complete",
-                        "agent":  node_name,
-                        "label":  label,
-                        "status": "complete",
-                        "summary": safe_output,
-                    })
-
                 elif event_type == "on_chain_error":
                     error_msg = str(event.get("data", {}).get("error", "Unknown error"))
                     yield _sse({
                         "event":   "pipeline_error",
                         "agent":   node_name,
-                        "message": error_msg[:300],  # truncate — never leak stack traces
+                        "message": error_msg[:300],
                     })
                     return
 
-            # Pipeline completed — stream the final report
-            final_state = await graph_app.ainvoke(initial_state)
+            # Pipeline completed — emit final report from accumulated state
             yield _sse({
-                "event":           "pipeline_complete",
-                "session_id":      session_id,
-                "final_report":    final_state.get("final_report"),
-                "compliance_audit": final_state.get("compliance_audit"),
-                "critic_scores":   final_state.get("critic_scores"),
-                "pipeline_errors": final_state.get("pipeline_errors"),
+                "event":            "pipeline_complete",
+                "session_id":       session_id,
+                "final_report":     state_accumulator.get("final_report"),
+                "compliance_audit": state_accumulator.get("compliance_audit"),
+                "critic_scores":    state_accumulator.get("critic_scores"),
+                "pipeline_errors":  state_accumulator.get("pipeline_errors") or [],
             })
 
         except ValueError as e:
-            # Injection detected or validation error
             yield _sse({"event": "pipeline_error", "message": str(e)[:200]})
         except Exception as e:
             yield _sse({"event": "pipeline_error", "message": f"Unexpected error: {str(e)[:200]}"})
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
-# ── POST /analyze/sync — blocking (for testing + evaluation) ──────────────────
+# ── POST /analyze/sync ────────────────────────────────────────────────────────
 
 @router.post("/sync", response_model=SyncAnalyzeResponse)
 async def analyze_sync(request: AnalyzeRequest):
-    """
-    Synchronous version — runs the full pipeline and returns the complete result.
-    Use this for testing, evaluation, or when SSE is not supported.
-    """
+    """Synchronous version — runs full pipeline, returns complete result."""
     initial_state = _build_initial_state(request)
     session_id = initial_state["session_id"]
     log_request(session_id, "sync")
 
     try:
-        final_state = await asyncio.get_event_loop().run_in_executor(
-            None, graph_app.invoke, initial_state
+        loop = asyncio.get_running_loop()
+        final_state = await loop.run_in_executor(
+            None, lambda: graph_app.invoke(initial_state, config=GRAPH_CONFIG)
         )
         return SyncAnalyzeResponse(
             session_id=session_id,
@@ -215,34 +227,28 @@ async def analyze_sync(request: AnalyzeRequest):
         raise HTTPException(status_code=500, detail=f"Pipeline error: {str(e)[:300]}")
 
 
-# ── GET /analyze/demo/{persona} — load a pre-built demo persona ───────────────
+# ── GET /analyze/demo/{persona} ───────────────────────────────────────────────
 
 @router.get("/demo/{persona}")
 async def get_demo_persona(persona: Literal["alex", "jordan", "sam"]):
-    """
-    Returns a pre-built demo persona profile ready to submit to /analyze.
-    Used by the Streamlit frontend's "Load Demo" buttons.
-    """
+    """Returns a pre-built demo persona ready to submit to /analyze."""
     profile = PERSONAS.get(persona)
     if not profile:
-        raise HTTPException(status_code=404, detail=f"Persona '{persona}' not found. Use: alex, jordan, sam")
+        raise HTTPException(status_code=404, detail=f"Persona '{persona}' not found.")
     return {"persona": persona, "profile": profile}
 
 
-# ── Safe output summary — never stream raw financial data ─────────────────────
+# ── Safe output summary ───────────────────────────────────────────────────────
 
 def _safe_output_summary(node_name: str, output: dict) -> dict:
-    """
-    Returns a safe, non-sensitive summary of each agent's output for the SSE stream.
-    Raw financial figures (income, debts, SSN equivalents) are never streamed —
-    only scores, statuses, and non-sensitive summaries.
-    """
+    """Returns a non-sensitive summary of each agent's output for SSE."""
     if not isinstance(output, dict):
         return {}
 
     summaries = {
         "profile_builder": lambda o: {
-            "age": o.get("age"), "location": o.get("location"),
+            "age": o.get("age"),
+            "location": o.get("location"),
             "risk_tolerance": o.get("risk_tolerance"),
         },
         "behavioral_pattern": lambda o: {
@@ -251,21 +257,36 @@ def _safe_output_summary(node_name: str, output: dict) -> dict:
         },
         "budget_architect": lambda o: {
             "health_score": (o.get("budget_recommendation") or {}).get("health_score", {}).get("total"),
-            "grade":        (o.get("budget_recommendation") or {}).get("health_score", {}).get("grade"),
-            "framework":    (o.get("budget_recommendation") or {}).get("recommended_framework"),
+            "grade": (o.get("budget_recommendation") or {}).get("health_score", {}).get("grade"),
+            "framework": (o.get("budget_recommendation") or {}).get("recommended_framework"),
+        },
+        "goal_engineering": lambda o: {
+            "goals_analyzed": len(((o.get("goal_roadmap") or {}).get("computed_goals")) or []),
+            "funding_gap": ((o.get("goal_roadmap") or {}).get("cross_goal_summary") or {}).get("funding_gap"),
         },
         "investment_strategist": lambda o: {
-            "allocation_summary": (o.get("investment_strategy") or {}).get("allocation"),
-            "risk_alignment":     (o.get("investment_strategy") or {}).get("risk_alignment"),
+            "allocation": (o.get("investment_strategy") or {}).get("allocation"),
+            "risk_alignment": (o.get("investment_strategy") or {}).get("risk_alignment"),
+        },
+        "debt_elimination": lambda o: {
+            "method": (o.get("debt_roadmap") or {}).get("recommended_method"),
+            "total_debt": (o.get("debt_roadmap") or {}).get("total_debt_balance"),
+        },
+        "tax_intelligence": lambda o: {
+            "savings_potential": (o.get("tax_opportunities") or {}).get("total_annual_savings_potential"),
+        },
+        "life_event": lambda o: {
+            "events_detected": len(((o.get("life_events") or {}).get("events")) or []),
+        },
+        "personalised_advisor": lambda o: {
+            "priority_count": len(((o.get("personalised_advice") or {}).get("priority_actions")) or []),
         },
         "critic": lambda o: {
-            "status":       (o.get("critic_scores") or {}).get("status"),
-            "lowest_score": (o.get("critic_scores") or {}).get("lowest_score"),
-            "average_score": (o.get("critic_scores") or {}).get("average_score"),
+            "status": (o.get("critic_scores") or {}).get("status"),
         },
         "compliance": lambda o: {
-            "action":    (o.get("compliance_audit") or {}).get("action"),
-            "audit_id":  (o.get("compliance_audit") or {}).get("audit_id"),
+            "action": (o.get("compliance_audit") or {}).get("action"),
+            "audit_id": (o.get("compliance_audit") or {}).get("audit_id"),
         },
     }
 

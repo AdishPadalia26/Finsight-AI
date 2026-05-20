@@ -1,170 +1,121 @@
 "use client";
 
 import { useState } from "react";
-import { RotateCcw } from "lucide-react";
+import type { ComponentType } from "react";
+import { BriefcaseBusiness, Percent, TrendingDown } from "lucide-react";
 
 interface Scenario {
   key: string;
   label: string;
-  min: number;
-  max: number;
-  unit: string;
-  default: number;
-  formatValue: (v: number) => string;
+  detail: string;
+  penalty: number;
+  icon: ComponentType<{ size?: number; className?: string }>;
+  modifier: Record<string, number | string>;
 }
 
 const SCENARIOS: Scenario[] = [
   {
-    key: "job_loss_months",
-    label: "Job Loss Duration",
-    min: 1,
-    max: 12,
-    unit: "months",
-    default: 6,
-    formatValue: (v) => `${v} mo`,
+    key: "job_loss",
+    label: "Job Loss",
+    detail: "Income drops to $0 for 3 months",
+    penalty: 14,
+    icon: BriefcaseBusiness,
+    modifier: { job_loss_months: 3, income_multiplier: 0 },
   },
   {
-    key: "market_drop_pct",
-    label: "Market Drop",
-    min: 10,
-    max: 50,
-    unit: "%",
-    default: 30,
-    formatValue: (v) => `-${v}%`,
+    key: "market_crash",
+    label: "Market Crash",
+    detail: "-30% portfolio shock",
+    penalty: 10,
+    icon: TrendingDown,
+    modifier: { market_drop_pct: 30 },
   },
   {
-    key: "medical_cost",
-    label: "Emergency Expense",
-    min: 10000,
-    max: 100000,
-    unit: "$",
-    default: 50000,
-    formatValue: (v) => `$${(v / 1000).toFixed(0)}k`,
-  },
-  {
-    key: "rate_change_bps",
-    label: "Rate Change",
-    min: -100,
-    max: 500,
-    unit: "bps",
-    default: 300,
-    formatValue: (v) => `${v >= 0 ? "+" : ""}${(v / 100).toFixed(1)}%`,
-  },
-  {
-    key: "inflation_spike_pct",
-    label: "Inflation Spike",
-    min: 3,
-    max: 10,
-    unit: "%",
-    default: 5,
-    formatValue: (v) => `+${v}%`,
+    key: "rate_spike",
+    label: "Rate Spike",
+    detail: "+2% interest on debts",
+    penalty: 8,
+    icon: Percent,
+    modifier: { rate_change_bps: 200 },
   },
 ];
 
 interface Props {
-  onRerun: (overrides: Record<string, number>) => void;
+  baseProfile?: Record<string, unknown> | null;
   disabled?: boolean;
 }
 
-export default function ScenarioSimulator({ onRerun, disabled }: Props) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [values, setValues] = useState<Record<string, number>>(
-    Object.fromEntries(SCENARIOS.map((s) => [s.key, s.default]))
-  );
+export default function ScenarioSimulator({ baseProfile, disabled }: Props) {
+  const [active, setActive] = useState<Record<string, boolean>>({});
+  const [results, setResults] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState<string | null>(null);
 
-  function handleChange(key: string, val: number) {
-    setValues((v) => ({ ...v, [key]: val }));
-  }
+  async function toggleScenario(scenario: Scenario) {
+    const nextActive = !active[scenario.key];
+    setActive((prev) => ({ ...prev, [scenario.key]: nextActive }));
+    if (!nextActive) return;
 
-  function handleReset() {
-    setValues(Object.fromEntries(SCENARIOS.map((s) => [s.key, s.default])));
+    setLoading(scenario.key);
+    try {
+      const res = await fetch("/api/scenario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile: baseProfile ?? {},
+          scenario: { ...scenario.modifier, penalty: scenario.penalty },
+        }),
+      });
+      const data = await res.json();
+      setResults((prev) => ({ ...prev, [scenario.key]: Number(data.delta ?? -scenario.penalty) }));
+    } catch {
+      setResults((prev) => ({ ...prev, [scenario.key]: -scenario.penalty }));
+    } finally {
+      setLoading(null);
+    }
   }
 
   return (
-    <div className="mt-4">
-      <button
-        onClick={() => setIsOpen((v) => !v)}
-        className="w-full flex items-center justify-between bg-gray-900/60 border border-gray-800 hover:border-amber-500/30 rounded-2xl px-5 py-4 transition-colors group"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-white font-ui">
-            Scenario Simulator
-          </span>
-          <span className="text-[10px] text-gray-600 font-ui">
-            — adjust stress parameters and re-run
-          </span>
-        </div>
-        <span className="text-gray-600 group-hover:text-amber-500 transition-colors text-lg">
-          {isOpen ? "−" : "+"}
-        </span>
-      </button>
+    <div className="mt-4 bg-gray-900/60 border border-gray-800 rounded-2xl p-5">
+      <div className="mb-4">
+        <p className="text-sm font-semibold text-white font-ui">Scenario Simulator</p>
+        <p className="text-xs text-gray-600 font-ui mt-0.5">
+          Toggle quick stress scenarios and view estimated health-score impact.
+        </p>
+      </div>
 
-      {isOpen && (
-        <div className="bg-gray-900/40 border border-t-0 border-gray-800 rounded-b-2xl p-5">
-          <p className="text-xs text-gray-500 font-ui mb-5 leading-relaxed">
-            Drag sliders to adjust stress parameters, then re-run the Critic Agent to
-            see how the financial plan holds up under different conditions.
-          </p>
-
-          <div className="space-y-5 mb-6">
-            {SCENARIOS.map((scenario) => (
-              <div key={scenario.key}>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs text-gray-300 font-ui">
-                    {scenario.label}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-jet text-amber-400 min-w-[48px] text-right">
-                      {scenario.formatValue(values[scenario.key])}
-                    </span>
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min={scenario.min}
-                  max={scenario.max}
-                  step={scenario.key === "medical_cost" ? 5000 : scenario.key === "rate_change_bps" ? 50 : 1}
-                  value={values[scenario.key]}
-                  onChange={(e) =>
-                    handleChange(scenario.key, parseInt(e.target.value))
-                  }
-                  disabled={disabled}
-                  className="w-full disabled:opacity-40"
-                />
-                <div className="flex justify-between text-[9px] font-jet text-gray-700 mt-0.5">
-                  <span>{scenario.formatValue(scenario.min)}</span>
-                  <span>{scenario.formatValue(scenario.max)}</span>
-                </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {SCENARIOS.map((scenario) => {
+          const Icon = scenario.icon;
+          const isActive = !!active[scenario.key];
+          const delta = results[scenario.key];
+          return (
+            <button
+              key={scenario.key}
+              onClick={() => toggleScenario(scenario)}
+              disabled={disabled || loading === scenario.key}
+              className={`text-left rounded-xl border p-4 transition-all ${
+                isActive
+                  ? "border-amber-500/50 bg-amber-500/10"
+                  : "border-gray-800 bg-gray-950/30 hover:border-gray-700"
+              } disabled:opacity-50`}
+            >
+              <div className="flex items-center justify-between">
+                <Icon size={16} className={isActive ? "text-amber-400" : "text-gray-500"} />
+                <span className={`text-[10px] font-jet ${isActive ? "text-amber-400" : "text-gray-600"}`}>
+                  {loading === scenario.key ? "RUNNING" : isActive ? "ACTIVE" : "OFF"}
+                </span>
               </div>
-            ))}
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={handleReset}
-              disabled={disabled}
-              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-700 rounded-xl px-4 py-2.5 transition-colors disabled:opacity-40 font-ui"
-            >
-              <RotateCcw size={12} />
-              Reset
-            </button>
-            <button
-              onClick={() => onRerun(values)}
-              disabled={disabled}
-              className="flex-1 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-gray-950 disabled:text-gray-600 font-semibold py-2.5 rounded-xl transition-colors text-sm font-ui flex items-center justify-center gap-2"
-            >
-              {disabled ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
-                  Running…
-                </>
-              ) : (
-                "Re-run with These Scenarios →"
+              <p className="mt-3 text-sm font-semibold text-white font-ui">{scenario.label}</p>
+              <p className="mt-1 text-[10px] text-gray-500 font-ui">{scenario.detail}</p>
+              {typeof delta === "number" && (
+                <p className={`mt-3 text-xs font-jet ${delta < 0 ? "text-red-400" : "text-emerald-400"}`}>
+                  {delta < 0 ? "▼" : "▲"} {Math.abs(delta)} pts
+                </p>
               )}
             </button>
-          </div>
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import type { SSEEvent } from "@/lib/types";
 import { getGradeColor, getScoreColor } from "@/lib/utils";
+import { displayText } from "@/lib/display";
 
 interface Props {
   data: SSEEvent;
@@ -279,7 +280,7 @@ function ComplianceTab({
           <p className="text-xs text-red-400 uppercase tracking-widest mb-2">Pipeline Errors</p>
           <ul className="space-y-1">
             {errors.map((e, i) => (
-              <li key={i} className="text-xs text-red-300">{e}</li>
+              <li key={i} className="text-xs text-red-300">{displayText(e)}</li>
             ))}
           </ul>
         </div>

@@ -1,90 +1,74 @@
 import json
 import os
-import time
-from huggingface_hub import InferenceClient
+import re
+import ast
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# HuggingFace model assignments — best model per use case
+# Preferred Gemini model per agent role.
 MODELS = {
-    "extraction":   "mistralai/Mixtral-8x7B-Instruct-v0.1",   # fast, reliable JSON extraction
-    "analysis":     "mistralai/Mixtral-8x7B-Instruct-v0.1",   # pattern recognition & categorization
-    "reasoning":    "meta-llama/Llama-3.1-70B-Instruct",      # complex financial reasoning
-    "adversarial":  "meta-llama/Llama-3.3-70B-Instruct",      # stress testing & critique
-    "compliance":   "mistralai/Mistral-7B-Instruct-v0.3",     # fast classification & filtering
+    "extraction":   "gemini-2.5-flash",
+    "analysis":     "gemini-2.5-flash",
+    "reasoning":    "gemini-2.5-flash",
+    "adversarial":  "gemini-2.5-flash",
+    "compliance":   "gemini-2.5-flash",
 }
-
-_MAX_RETRIES = 3
-_RETRY_DELAYS = [2, 5, 10]  # exponential backoff seconds
 
 
 class BaseAgent:
     """
     Base class for all FinSight AI agents.
-    Uses HuggingFace Inference API — free tier, no payment required.
-
-    Each agent declares a MODEL_TYPE from MODELS above.
-    Includes retry logic with exponential backoff to satisfy the assignment
-    requirement for error handling and failure resilience.
+    Each subclass declares PRIMARY and optional FALLBACK provider/model/key-var;
+    llm_client routes accordingly with a deterministic fallback as final safety net.
     """
 
     MODEL_TYPE = "reasoning"
+    # Primary LLM
+    PROVIDER = None          # "gemini" | "nvidia" | "groq" | "openrouter"
+    MODEL_ID = None          # provider-specific model slug
+    API_KEY_VAR = None       # env var name holding the API key, e.g. "GROQ_API_KEY_1"
+    # Fallback LLM
+    FALLBACK_PROVIDER = None
+    FALLBACK_MODEL_ID = None
+    FALLBACK_API_KEY_VAR = None
     MAX_TOKENS = 4096
-    TEMPERATURE = 0.1   # low temperature for consistent structured output
+    TEMPERATURE = 0.1
 
     def __init__(self, name: str, system_prompt: str):
         self.name = name
         self.system_prompt = system_prompt
         self.model = MODELS[self.MODEL_TYPE]
-        self.client = InferenceClient(token=os.getenv("HUGGINGFACE_API_KEY"))
 
     def run(self, state: dict) -> dict:
         raise NotImplementedError(f"{self.name}.run() must be implemented by subclass")
 
     def _call_llm(self, user_message: str) -> str:
-        """
-        Call HuggingFace Inference API with retry on rate limit or transient errors.
-        Satisfies assignment requirement: error handling and retries.
-        """
+        from agents.llm_client import call_llm
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": user_message},
         ]
-
-        last_error = None
-        for attempt, delay in enumerate(_RETRY_DELAYS):
-            try:
-                response = self.client.chat_completion(
-                    model=self.model,
-                    messages=messages,
-                    max_tokens=self.MAX_TOKENS,
-                    temperature=self.TEMPERATURE,
-                )
-                return response.choices[0].message.content
-
-            except Exception as e:
-                last_error = e
-                error_str = str(e).lower()
-
-                # Don't retry on injection or validation errors — those are user errors
-                if "injection_detected" in error_str or "validation" in error_str:
-                    raise
-
-                if attempt < len(_RETRY_DELAYS) - 1:
-                    time.sleep(delay)
-                    continue
-
-        raise RuntimeError(
-            f"{self.name}: all {_MAX_RETRIES} LLM call attempts failed. "
-            f"Last error: {last_error}"
+        if "injection_detected" in user_message.lower():
+            raise ValueError("INJECTION_DETECTED in message")
+        return call_llm(
+            messages=messages,
+            temperature=self.TEMPERATURE,
+            max_tokens=self.MAX_TOKENS,
+            preferred_model=self.model,
+            provider=self.PROVIDER,
+            model_id=self.MODEL_ID,
+            api_key_var=self.API_KEY_VAR,
+            fallback_provider=self.FALLBACK_PROVIDER,
+            fallback_model_id=self.FALLBACK_MODEL_ID,
+            fallback_api_key_var=self.FALLBACK_API_KEY_VAR,
         )
 
     def _call_llm_json(self, user_message: str) -> dict:
         """
         Call LLM and parse the response as JSON.
-        Strips markdown code fences that open-source models often add.
-        Raises ValueError on unparseable JSON after all retries.
+        Strips markdown fences, extracts the first complete JSON object (handles
+        trailing markdown), and repairs truncated output.
         """
         raw = self._call_llm(user_message)
         cleaned = raw.strip()
@@ -92,38 +76,121 @@ class BaseAgent:
         # Strip ```json ... ``` or ``` ... ``` fences
         if cleaned.startswith("```"):
             lines = cleaned.split("\n")
-            # Remove first line (```json or ```) and last line (```)
             inner = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
             cleaned = "\n".join(inner).strip()
 
-        # Sometimes models prepend explanation before the JSON — find the first {
-        brace_idx = cleaned.find("{")
-        bracket_idx = cleaned.find("[")
-        start = min(
-            brace_idx if brace_idx != -1 else len(cleaned),
-            bracket_idx if bracket_idx != -1 else len(cleaned),
-        )
-        if start > 0:
-            cleaned = cleaned[start:]
+        # Fix: models sometimes write numbered array items as `1. "text"` (invalid JSON)
+        cleaned = re.sub(r'(?m)^(\s*)\d+\.\s*"', r'\1"', cleaned)
 
+        # Try parsing as-is first (fast path)
         try:
             return json.loads(cleaned)
-        except json.JSONDecodeError as e:
-            raise ValueError(
-                f"{self.name}: LLM returned invalid JSON after cleanup — {e}\n"
-                f"Raw output (first 400 chars): {raw[:400]}"
+        except json.JSONDecodeError:
+            pass
+
+        # Extract the first complete balanced JSON object — handles trailing markdown
+        extracted = self._extract_first_json_block(cleaned)
+        if extracted:
+            try:
+                return json.loads(extracted)
+            except json.JSONDecodeError:
+                pass
+
+        # Last resort: close unclosed brackets (truncated output)
+        repaired = self._repair_truncated_json(extracted or cleaned)
+        if repaired:
+            return repaired
+
+        raise ValueError(
+            f"{self.name}: LLM returned invalid JSON after cleanup and repair attempt.\n"
+            f"Raw output (first 400 chars): {raw[:400]}"
             )
+
+    @staticmethod
+    def _extract_first_json_block(text: str) -> str | None:
+        """
+        Extract the first complete balanced JSON object or array from text.
+        Handles models that output valid JSON followed by trailing markdown explanation.
+        """
+        start = -1
+        open_char, close_char = None, None
+        for i, ch in enumerate(text):
+            if ch == "{":
+                start, open_char, close_char = i, "{", "}"
+                break
+            if ch == "[":
+                start, open_char, close_char = i, "[", "]"
+                break
+        if start == -1:
+            return None
+
+        depth = 0
+        in_string = False
+        escaped = False
+        for i, ch in enumerate(text[start:], start):
+            if escaped:
+                escaped = False
+                continue
+            if ch == "\\" and in_string:
+                escaped = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == open_char:
+                depth += 1
+            elif ch == close_char:
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+        return None
+
+    @staticmethod
+    def _repair_truncated_json(text: str) -> dict | None:
+        """Close any unclosed brackets/braces left by a truncated LLM response."""
+        depth_brace = 0
+        depth_bracket = 0
+        in_string = False
+        escaped = False
+        for ch in text:
+            if escaped:
+                escaped = False
+                continue
+            if ch == "\\" and in_string:
+                escaped = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth_brace += 1
+            elif ch == "}":
+                depth_brace -= 1
+            elif ch == "[":
+                depth_bracket += 1
+            elif ch == "]":
+                depth_bracket -= 1
+
+        closing = "]" * max(depth_bracket, 0) + "}" * max(depth_brace, 0)
+        if not closing:
+            return None
+        try:
+            return json.loads(text.rstrip(",\n ") + closing)
+        except json.JSONDecodeError:
+            return None
 
 
 class StubAgent(BaseAgent):
     """
     Placeholder for Phase 2 agents.
     Returns a structured stub response so the LangGraph pipeline stays intact.
-    Logs the stub call so evaluators can see the full 12-agent trace in LangSmith.
     """
 
     def __init__(self, name: str, description: str):
-        # StubAgent doesn't call LLM — safe to pass empty system prompt
         self.name = name
         self.system_prompt = ""
         self.model = "stub"

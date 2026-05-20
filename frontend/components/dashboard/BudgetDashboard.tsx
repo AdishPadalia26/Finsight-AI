@@ -10,6 +10,7 @@ import {
   Cell,
   Tooltip,
 } from "recharts";
+import { displayText } from "@/lib/display";
 
 interface Props {
   budget: Record<string, unknown>;
@@ -123,11 +124,16 @@ export default function BudgetDashboard({ budget }: Props) {
 
   const healthScore = (budget.health_score as Record<string, unknown>) ?? {};
   const total = (healthScore.total as number) ?? 0;
-  const framework = (budget.recommended_framework as string) ?? "—";
-  const breakdown = (budget.budget_breakdown as Record<string, number>) ?? {};
-  const actionItems = (budget.action_items as string[]) ?? [];
-  const monthlySurplus = (budget.monthly_surplus as number) ?? 0;
-  const savingsRate = (budget.savings_rate as number) ?? 0;
+  const framework = String(budget.recommended_framework ?? "—");
+  const allocations = (budget.monthly_allocations as Record<string, number>) ?? {};
+  const breakdown = ((budget.budget_breakdown as Record<string, number>) ?? allocations) as Record<string, number>;
+  const actionItems: unknown[] =
+    (Array.isArray(budget.action_items) ? budget.action_items :
+     Array.isArray(budget.action_plan_90_days) ? budget.action_plan_90_days :
+     Array.isArray(budget.top_cuts) ? budget.top_cuts :
+     []);
+  const monthlySurplus = (budget.monthly_surplus as number) ?? allocations.current_surplus ?? 0;
+  const savingsRate = (budget.savings_rate as number) ?? (allocations.savings_debt && allocations.savings_debt > 0 ? 20 : 0);
   const dti = (budget.debt_to_income as number) ?? 0;
   const emergencyMonths = (budget.emergency_fund_months as number) ?? 0;
 
@@ -235,7 +241,7 @@ export default function BudgetDashboard({ budget }: Props) {
                 <span className="text-[10px] font-jet text-amber-500 shrink-0 mt-0.5">
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <p className="text-xs text-gray-400 font-ui leading-relaxed">{item}</p>
+                <p className="text-xs text-gray-400 font-ui leading-relaxed">{displayText(item)}</p>
               </li>
             ))}
           </ol>

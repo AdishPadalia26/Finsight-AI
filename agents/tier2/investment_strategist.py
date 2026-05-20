@@ -1,6 +1,6 @@
 import json
 from graph.nodes import BaseAgent
-from tools.data.market_data import get_market_snapshot, format_for_prompt
+from tools.data import market_data
 from tools.safety.output_scanner import scan_output
 
 SYSTEM_PROMPT = """## ROLE
@@ -49,14 +49,24 @@ class InvestmentStrategistAgent(BaseAgent):
     """
 
     MODEL_TYPE = "reasoning"
+    PROVIDER = "openrouter"
+    MODEL_ID = "openai/gpt-oss-120b:free"
+    API_KEY_VAR = "OPENROUTER_API_KEY_2"
+    FALLBACK_PROVIDER = "nvidia"
+    FALLBACK_MODEL_ID = "meta/llama-3.3-70b-instruct"
+    FALLBACK_API_KEY_VAR = "NVIDIA_API_KEY_1"
 
     def __init__(self):
         super().__init__(name="InvestmentStrategistAgent", system_prompt=SYSTEM_PROMPT)
 
     def run(self, state: dict) -> dict:
-        # Pull live data first — handle None gracefully
-        snapshot = get_market_snapshot()
-        market_text = format_for_prompt(snapshot)
+        # Pull extended live market data — handles None gracefully
+        try:
+            snapshot = market_data.get_full_market_snapshot()
+        except Exception as e:
+            print(f"[InvestmentStrategist] Market data unavailable - using fallback: {e}")
+            snapshot = self._empty_market_snapshot()
+        market_text = market_data.format_full_snapshot_for_prompt(snapshot)
 
         prompt_data = {
             "live_market_data": market_text,
@@ -77,7 +87,20 @@ class InvestmentStrategistAgent(BaseAgent):
             },
         }
 
-        raw_result = self._call_llm_json(json.dumps(prompt_data))
+        try:
+            raw_result = self._call_llm_json(json.dumps(prompt_data))
+        except (RuntimeError, ValueError) as e:
+            print(f"[InvestmentStrategist] LLM unavailable — using fallback: {e}")
+            raw_result = {
+                "allocation": self._fallback_allocation(state.get("risk_tolerance")),
+                "risk_alignment": (
+                    f"Fallback allocation reflects a {state.get('risk_tolerance', 'moderate')} profile and "
+                    "available investment horizon. Past performance does not guarantee future results."
+                ),
+                "recommendations": ["LLM analysis unavailable — default allocation shown."],
+            }
+
+        raw_result = self._normalize_result(raw_result, state)
 
         # Defense-in-depth: scan this agent's output before it leaves
         text_to_scan = json.dumps(raw_result)
@@ -88,4 +111,147 @@ class InvestmentStrategistAgent(BaseAgent):
                 f"{scan['violations']}"
             )
 
+        # Inject raw market snapshot for frontend display
+        raw_result["live_market_snapshot"] = snapshot
+        raw_result["market_context"] = {
+            k: v for k, v in snapshot.items() if v is not None
+        }
+
         return {**state, "investment_strategy": raw_result}
+
+    @classmethod
+    def _normalize_result(cls, result: object, state: dict) -> dict:
+        if not isinstance(result, dict):
+            return cls._fallback_result(state, "Investment model returned a non-object response.")
+
+        nested = result.get("investment_strategy")
+        if isinstance(nested, dict):
+            result = {**nested, **{k: v for k, v in result.items() if k != "investment_strategy"}}
+
+        allocation = result.get("allocation")
+        if isinstance(allocation, list):
+            converted = {}
+            for item in allocation:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("asset_class") or item.get("name") or item.get("category")
+                value = item.get("percentage") or item.get("value") or item.get("allocation")
+                if isinstance(name, str) and isinstance(value, (int, float)):
+                    converted[name.lower().replace(" ", "_")] = value
+            allocation = converted
+
+        if not isinstance(allocation, dict) or not allocation:
+            return cls._fallback_result(state, "Investment model response did not include a usable allocation.")
+
+        normalized_allocation = {
+            str(k): float(v)
+            for k, v in allocation.items()
+            if isinstance(v, (int, float)) and v > 0
+        }
+        if not normalized_allocation:
+            return cls._fallback_result(state, "Investment allocation did not include positive numeric weights.")
+
+        total = sum(normalized_allocation.values())
+        if total <= 0:
+            return cls._fallback_result(state, "Investment allocation total was zero.")
+
+        if abs(total - 100) > 0.01:
+            normalized_allocation = {
+                k: round(v / total * 100, 1)
+                for k, v in normalized_allocation.items()
+            }
+
+        result["allocation"] = normalized_allocation
+        result.setdefault(
+            "risk_alignment",
+            (
+                f"Allocation reflects a {state.get('risk_tolerance', 'moderate')} profile and "
+                "available investment horizon. Past performance does not guarantee future results."
+            ),
+        )
+        result.setdefault("rationale", "Allocation generated by the investment strategist.")
+        result["account_optimization"] = (
+            result.get("account_optimization")
+            if isinstance(result.get("account_optimization"), str) and result.get("account_optimization")
+            else "Use tax-advantaged retirement accounts for higher-growth and income-producing assets when available; keep cash needs liquid and taxable holdings tax-efficient."
+        )
+        result["rationale"] = (
+            result.get("rationale")
+            if isinstance(result.get("rationale"), str) and result.get("rationale")
+            else json.dumps(result.get("rationale")) if result.get("rationale") else "Allocation generated by the investment strategist."
+        )
+        result["risk_alignment"] = (
+            result.get("risk_alignment")
+            if isinstance(result.get("risk_alignment"), str) and result.get("risk_alignment")
+            else json.dumps(result.get("risk_alignment")) if result.get("risk_alignment") else f"Allocation reflects a {state.get('risk_tolerance', 'moderate')} profile and available investment horizon. Past performance does not guarantee future results."
+        )
+        result.setdefault("rebalancing_guidance", "Review quarterly and rebalance when any asset class drifts more than 5 percentage points.")
+        return result
+
+    @classmethod
+    def _fallback_result(cls, state: dict, reason: str) -> dict:
+        return {
+            "allocation": cls._fallback_allocation(state.get("risk_tolerance")),
+            "risk_alignment": (
+                f"Fallback allocation reflects a {state.get('risk_tolerance', 'moderate')} profile and "
+                "available investment horizon. Past performance does not guarantee future results."
+            ),
+            "etf_categories": {
+                "us_equities": "broad US equity index funds",
+                "international_equities": "broad international equity index funds",
+                "bonds": "investment-grade bond funds",
+                "cash": "high-liquidity cash equivalents",
+                "alternatives": "diversifying real-asset or alternative strategy funds",
+            },
+            "account_optimization": (
+                "Use tax-advantaged retirement accounts for higher-growth and income-producing assets "
+                "when available; keep cash needs liquid and taxable holdings tax-efficient."
+            ),
+            "rebalancing_guidance": "Review quarterly and rebalance when any asset class drifts more than 5 percentage points.",
+            "rationale": reason,
+            "fallback": True,
+        }
+
+    @staticmethod
+    def _empty_market_snapshot() -> dict:
+        return {
+            "sp500_price": None,
+            "sp500_ytd_return": None,
+            "intl_equity_ytd": None,
+            "reit_ytd": None,
+            "gold_price": None,
+            "gold_ytd_return": None,
+            "bond_price": None,
+            "treasury_10yr_pct": None,
+            "treasury_3mo_pct": None,
+            "corporate_spread_pct": None,
+            "inflation_rate_pct": None,
+            "fed_funds_rate_pct": None,
+            "vix": None,
+        }
+
+    @staticmethod
+    def _fallback_allocation(risk_tolerance: str | None) -> dict:
+        if risk_tolerance == "conservative":
+            return {
+                "us_equities": 35,
+                "international_equities": 15,
+                "bonds": 35,
+                "cash": 10,
+                "alternatives": 5,
+            }
+        if risk_tolerance == "aggressive":
+            return {
+                "us_equities": 60,
+                "international_equities": 25,
+                "bonds": 10,
+                "cash": 2,
+                "alternatives": 3,
+            }
+        return {
+            "us_equities": 50,
+            "international_equities": 20,
+            "bonds": 20,
+            "cash": 5,
+            "alternatives": 5,
+        }

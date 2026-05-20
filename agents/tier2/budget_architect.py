@@ -54,6 +54,12 @@ class BudgetArchitectAgent(BaseAgent):
     """
 
     MODEL_TYPE = "reasoning"
+    PROVIDER = "openrouter"
+    MODEL_ID = "deepseek/deepseek-v4-flash:free"
+    API_KEY_VAR = "OPENROUTER_API_KEY_1"
+    FALLBACK_PROVIDER = "groq"
+    FALLBACK_MODEL_ID = "llama-3.3-70b-versatile"
+    FALLBACK_API_KEY_VAR = "GROQ_API_KEY_1"
 
     def __init__(self):
         super().__init__(name="BudgetArchitectAgent", system_prompt=SYSTEM_PROMPT)
@@ -108,8 +114,30 @@ class BudgetArchitectAgent(BaseAgent):
             },
         }
 
-        result = self._call_llm_json(json.dumps(prompt_data))
-        # Always use pre-computed health score — don't trust LLM math
+        try:
+            result = self._call_llm_json(json.dumps(prompt_data))
+        except (RuntimeError, ValueError) as e:
+            print(f"[BudgetArchitect] LLM unavailable — using fallback: {e}")
+            result = {
+                "recommended_framework": "50/30/20",
+                "key_finding": "LLM analysis unavailable — pre-computed metrics are accurate.",
+                "top_cuts": [],
+                "monthly_allocations": {},
+                "action_plan_90_days": [],
+            }
+
+        # Normalize string fields that the LLM may return as objects
+        if not isinstance(result.get("recommended_framework"), str):
+            result["recommended_framework"] = json.dumps(result.get("recommended_framework")) if result.get("recommended_framework") else "50/30/20"
+        if not isinstance(result.get("key_finding"), str):
+            result["key_finding"] = json.dumps(result.get("key_finding")) if result.get("key_finding") else ""
+        # Always inject pre-computed values — override any LLM-invented numbers
         result["health_score"] = health
+        result["savings_rate"] = sr
+        result["debt_to_income"] = dti
+        result["emergency_fund_months"] = em
+        result["monthly_surplus"] = round(income - expenses, 2)
+        result["net_worth"] = nw
+        result["total_debt_balance"] = total_debt
 
         return {**state, "budget_recommendation": result}

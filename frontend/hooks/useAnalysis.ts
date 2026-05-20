@@ -102,5 +102,14 @@ export function useAnalysis() {
     setStatus("idle");
   }, []);
 
-  return { agents, result, status, error, revisionCount, run, cancel };
+  const reset = useCallback(() => {
+    cancelRef.current?.();
+    setAgents({});
+    setResult(null);
+    setError(null);
+    setRevisionCount(0);
+    setStatus("idle");
+  }, []);
+
+  return { agents, result, status, error, revisionCount, run, cancel, reset };
 }

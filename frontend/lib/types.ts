@@ -3,20 +3,21 @@ export type RiskTolerance = "conservative" | "moderate" | "aggressive";
 export interface Debt {
   type: string;
   balance: number;
-  monthly_payment: number;
   interest_rate: number;
+  minimum_payment: number;
 }
 
 export interface Goal {
-  name: string;
+  description: string;
   target_amount: number;
-  target_years: number;
-  priority: "high" | "medium" | "low";
+  timeline_months: number;
+  priority: "critical" | "high" | "medium" | "low";
 }
 
 export interface FinancialProfile {
   age: number;
   location: string;
+  employment_status?: string;
   monthly_income: number;
   monthly_expenses: number;
   savings: number;
@@ -26,6 +27,9 @@ export interface FinancialProfile {
   goals: Goal[];
   risk_tolerance: RiskTolerance;
   investment_horizon: number;
+  credit_score?: number;
+  tax_bracket?: number;           // marginal federal bracket as decimal, e.g. 0.22
+  recent_life_events?: string[];  // ["new_job", "had_child", ...]
 }
 
 export interface AnalyzeRequest {

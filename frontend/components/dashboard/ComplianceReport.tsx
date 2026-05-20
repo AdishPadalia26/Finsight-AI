@@ -1,6 +1,7 @@
 "use client";
 
 import { ShieldCheck, ShieldAlert, AlertOctagon } from "lucide-react";
+import { displayText } from "@/lib/display";
 
 interface Props {
   audit: Record<string, unknown>;
@@ -16,19 +17,22 @@ export default function ComplianceReport({ audit, pipelineErrors }: Props) {
     );
   }
 
-  const action = (audit.action as string) ?? (audit.status as string) ?? "—";
-  const auditId = (audit.audit_id as string) ?? (audit.session_id as string) ?? "—";
-  const disclaimer = (audit.disclaimer as string) ?? "";
-  const violations = (audit.violations_found as string[]) ?? [];
-  const actionsTaken = (audit.actions_taken as string[]) ?? [];
-  const timestamp = (audit.timestamp as string) ?? "";
+  const action = String(audit.action ?? audit.status ?? "—");
+  const auditId = String(audit.audit_id ?? audit.session_id ?? "—");
+  const disclaimer = String(audit.disclaimer ?? "");
+  const violationsRaw = audit.violations_found;
+  const violations: unknown[] = Array.isArray(violationsRaw) ? violationsRaw : [];
+  const actionsTakenRaw = audit.actions_taken;
+  const actionsTaken: unknown[] = Array.isArray(actionsTakenRaw) ? actionsTakenRaw : [];
+  const timestamp = String(audit.timestamp ?? "");
 
-  const isApproved = action === "APPROVED" || action === "REWRITTEN";
+  const isRewritten = action === "REWRITTEN" || action === "REWRITTEN_AND_APPROVED";
+  const isApproved = action === "APPROVED" || isRewritten;
   const isBlocked = action === "BLOCKED";
 
   const StatusIcon = isBlocked
     ? AlertOctagon
-    : action === "REWRITTEN"
+    : isRewritten
     ? ShieldAlert
     : ShieldCheck;
 
@@ -39,7 +43,7 @@ export default function ComplianceReport({ audit, pipelineErrors }: Props) {
         text: "text-red-300",
         badge: "bg-red-500/10 text-red-400 border-red-500/20",
       }
-    : action === "REWRITTEN"
+    : isRewritten
     ? {
         bg: "bg-amber-500/8 border-amber-500/25",
         icon: "text-amber-400",
@@ -64,7 +68,7 @@ export default function ComplianceReport({ audit, pipelineErrors }: Props) {
           </p>
           <p className="text-[10px] text-gray-500 font-ui mt-0.5">
             {action === "APPROVED" && "Output cleared all compliance checks — no violations detected."}
-            {action === "REWRITTEN" && "Output contained moderate violations — rewritten before delivery."}
+            {isRewritten && "Output contained moderate violations — rewritten before delivery."}
             {action === "BLOCKED" && "Output blocked: critical regulatory violation detected."}
           </p>
         </div>
@@ -115,8 +119,8 @@ export default function ComplianceReport({ audit, pipelineErrors }: Props) {
             <tbody>
               {[
                 { check: "Critical violation scan", pass: !isBlocked },
-                { check: "Ticker symbol detection", pass: violations.filter(v => /\$[A-Z]/.test(v)).length === 0 },
-                { check: "Guaranteed return language", pass: violations.filter(v => /guarantee/i.test(v)).length === 0 },
+                { check: "Ticker symbol detection", pass: violations.filter(v => /\$[A-Z]/.test(displayText(v))).length === 0 },
+                { check: "Guaranteed return language", pass: violations.filter(v => /guarantee/i.test(displayText(v))).length === 0 },
                 { check: "Disclaimer injected", pass: !!disclaimer },
                 { check: "PII in output", pass: true },
               ].map((row, i) => (
@@ -150,7 +154,7 @@ export default function ComplianceReport({ audit, pipelineErrors }: Props) {
             {actionsTaken.map((a, i) => (
               <li key={i} className="text-xs text-amber-300/80 font-ui flex items-start gap-2">
                 <span className="text-amber-500 shrink-0">→</span>
-                {a}
+                {displayText(a)}
               </li>
             ))}
           </ul>
@@ -179,7 +183,7 @@ export default function ComplianceReport({ audit, pipelineErrors }: Props) {
           </p>
           {pipelineErrors.map((e, i) => (
             <p key={i} className="text-xs text-red-300/80 font-ui">
-              {e}
+              {displayText(e)}
             </p>
           ))}
         </div>
