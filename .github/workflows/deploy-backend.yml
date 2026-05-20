@@ -67,12 +67,19 @@ jobs:
             --cpu=1 \
             --timeout=300 \
             --port=8080 \
-            --set-secrets=HUGGINGFACE_API_KEY=HUGGINGFACE_API_KEY:latest \
+            --set-secrets=GROQ_API_KEY_1=GROQ_API_KEY_1:latest \
+            --set-secrets=GROQ_API_KEY_2=GROQ_API_KEY_2:latest \
+            --set-secrets=GROQ_API_KEY_3=GROQ_API_KEY_3:latest \
+            --set-secrets=OPENROUTER_API_KEY_1=OPENROUTER_API_KEY_1:latest \
+            --set-secrets=OPENROUTER_API_KEY_2=OPENROUTER_API_KEY_2:latest \
+            --set-secrets=OPENROUTER_API_KEY_3=OPENROUTER_API_KEY_3:latest \
+            --set-secrets=NVIDIA_API_KEY_1=NVIDIA_API_KEY_1:latest \
+            --set-secrets=NVIDIA_API_KEY_2=NVIDIA_API_KEY_2:latest \
+            --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest \
             --set-secrets=FRED_API_KEY=FRED_API_KEY:latest \
-            --set-secrets=LANGCHAIN_API_KEY=LANGCHAIN_API_KEY:latest \
-            --set-secrets=LANGCHAIN_PROJECT=LANGCHAIN_PROJECT:latest \
-            --set-secrets=LANGCHAIN_TRACING_V2=LANGCHAIN_TRACING_V2:latest \
-            --set-env-vars="ALLOWED_ORIGINS=*" \
+            --set-secrets=LANGSMITH_API_KEY=LANGSMITH_API_KEY:latest \
+            --set-secrets=SECRET_KEY=SECRET_KEY:latest \
+            --set-env-vars="ALLOWED_ORIGINS=*,LANGSMITH_PROJECT=finsight-ai" \
             --quiet
 
       - name: Get Cloud Run URL
@@ -81,4 +88,3 @@ jobs:
             --region=${{ env.GCP_REGION }} \
             --format='value(status.url)')
           echo "Backend live at: $SERVICE_URL"
-          echo "Health check: $SERVICE_URL/health"
