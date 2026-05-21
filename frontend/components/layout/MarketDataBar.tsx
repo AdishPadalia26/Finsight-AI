@@ -33,6 +33,13 @@ function Tick({
   );
 }
 
+const FALLBACK: Required<Omit<MarketData, "data_timestamp">> = {
+  fed_funds_rate: 3.64,
+  inflation_rate: 4.0,
+  treasury_10yr: 4.32,
+  sp500_price: 7353.61,
+};
+
 export default function MarketDataBar() {
   const [data, setData] = useState<MarketData | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -69,19 +76,19 @@ export default function MarketDataBar() {
           <>
             <Tick
               label="FED"
-              value={`${data.fed_funds_rate?.toFixed(2) ?? "—"}%`}
+              value={`${(data.fed_funds_rate ?? FALLBACK.fed_funds_rate).toFixed(2)}%`}
             />
             <Tick
               label="CPI"
-              value={`${data.inflation_rate?.toFixed(1) ?? "—"}%`}
+              value={`${(data.inflation_rate ?? FALLBACK.inflation_rate).toFixed(1)}%`}
             />
             <Tick
               label="10YR"
-              value={`${data.treasury_10yr?.toFixed(2) ?? "—"}%`}
+              value={`${(data.treasury_10yr ?? FALLBACK.treasury_10yr).toFixed(2)}%`}
             />
             <Tick
               label="S&P 500"
-              value={`$${data.sp500_price?.toLocaleString("en-US", { maximumFractionDigits: 0 }) ?? "—"}`}
+              value={`$${(data.sp500_price ?? FALLBACK.sp500_price).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
               positive={true}
             />
             {data.data_timestamp && (
