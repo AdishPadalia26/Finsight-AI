@@ -63,107 +63,69 @@ This separation reduces hallucinated numbers, keeps the output auditable, and ma
 
 ## Screenshots and Image Placeholders
 
-Create a `docs/screenshots/` folder and add the following images when preparing the final submission README or presentation.
+The README uses screenshots from `docs/Screenshots/`. These images show the full evaluator journey: landing page, profile input, live agent execution, generated dashboards, critic stress testing, and compliance approval.
 
-### 1. Homepage Hero
+### Product Walkthrough
 
-```md
-![Homepage hero](docs/screenshots/01-homepage-hero.png)
-```
+#### 1. Landing Page
 
-Placeholder:
+![FinSight AI landing page](docs/Screenshots/HeroPage.png)
 
-![Homepage hero placeholder](docs/screenshots/01-homepage-hero.png)
+#### 2. Demo Persona Selection and Financial Profile Input
 
-### 2. Demo Persona Selection
+![Demo persona selection and financial profile input](docs/Screenshots/Financial%20Input%20Screen.png)
 
-```md
-![Demo persona selection](docs/screenshots/02-demo-persona-selection.png)
-```
+#### 3. Agent Pipeline Execution
 
-Placeholder:
+The pipeline view shows the LangGraph workflow running across the agent tiers, including data intelligence, financial planning, intelligence/safety agents, and the final report stage.
 
-![Demo persona selection placeholder](docs/screenshots/02-demo-persona-selection.png)
+![Agentic AI pipeline first stage](docs/Screenshots/Agentic%20AI%20pipeline-1.png)
 
-### 3. Agent Pipeline Mid-Execution
+![Agentic AI pipeline completion stage](docs/Screenshots/Agentic%20AI%20pipeline-2.png)
 
-```md
-![Agent pipeline mid-execution](docs/screenshots/03-agent-pipeline-mid-execution.png)
-```
+#### 4. Final Financial Health Score
 
-Placeholder:
+![Financial analysis overall score](docs/Screenshots/Financial%20Analysis%20Overall%20Score.png)
 
-![Agent pipeline mid-execution placeholder](docs/screenshots/03-agent-pipeline-mid-execution.png)
+### Analysis Dashboards
 
-### 4. Budget Dashboard
+#### Overview
 
-```md
-![Budget dashboard](docs/screenshots/04-budget-dashboard.png)
-```
+![Overview dashboard](docs/Screenshots/Overview.png)
 
-Placeholder:
+#### Budget
 
-![Budget dashboard placeholder](docs/screenshots/04-budget-dashboard.png)
+![Budget dashboard](docs/Screenshots/Budget.png)
 
-### 5. Investment Dashboard
+#### Investment
 
-```md
-![Investment dashboard](docs/screenshots/05-investment-dashboard.png)
-```
+![Investment dashboard](docs/Screenshots/Investment.png)
 
-Placeholder:
+#### Goals
 
-![Investment dashboard placeholder](docs/screenshots/05-investment-dashboard.png)
+![Goals dashboard](docs/Screenshots/Goals.png)
 
-### 6. Stress Test Dashboard
+#### Debt
 
-```md
-![Stress test dashboard](docs/screenshots/06-stress-test-dashboard.png)
-```
+![Debt dashboard](docs/Screenshots/Debt.png)
 
-Placeholder:
+#### Tax Intelligence
 
-![Stress test dashboard placeholder](docs/screenshots/06-stress-test-dashboard.png)
+![Tax intelligence dashboard](docs/Screenshots/Tax%20Intelligence.png)
 
-### 7. Compliance Report
+#### Personal Advice
 
-```md
-![Compliance report](docs/screenshots/07-compliance-report.png)
-```
+![Personal advice dashboard](docs/Screenshots/Personal%20Advice-1.png)
 
-Placeholder:
+### Safety and Compliance Views
 
-![Compliance report placeholder](docs/screenshots/07-compliance-report.png)
+#### Stress Test
 
-### 8. Explainability Panel
+![Stress test dashboard](docs/Screenshots/Stress%20Test.png)
 
-```md
-![Explainability panel](docs/screenshots/08-explainability-panel.png)
-```
+#### Compliance Test
 
-Placeholder:
-
-![Explainability panel placeholder](docs/screenshots/08-explainability-panel.png)
-
-### 9. LangSmith Trace
-
-```md
-![LangSmith trace](docs/screenshots/09-langsmith-trace.png)
-```
-
-Placeholder:
-
-![LangSmith trace placeholder](docs/screenshots/09-langsmith-trace.png)
-
-### 10. GCP Cloud Run
-
-```md
-![GCP Cloud Run deployment](docs/screenshots/10-gcp-cloud-run.png)
-```
-
-Placeholder:
-
-![GCP Cloud Run deployment placeholder](docs/screenshots/10-gcp-cloud-run.png)
+![Compliance test dashboard](docs/Screenshots/Compliance%20Test.png)
 
 ---
 
