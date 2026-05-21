@@ -12,7 +12,7 @@ const DEFAULT: FinancialProfile = {
   investments: 5000,
   property_value: 0,
   debts: [],
-  goals: [{ name: "Emergency fund", target_amount: 20000, target_years: 2, priority: "high" }],
+  goals: [{ description: "Emergency fund", target_amount: 20000, timeline_months: 2, priority: "high" }],
   risk_tolerance: "moderate",
   investment_horizon: 10,
 };
