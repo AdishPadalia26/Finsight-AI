@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: finsight-ai-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # ── Set these in the Render dashboard (sync: false = never committed) ──
+      # Frontend origin for CORS — your Vercel URL, e.g. https://finsight-ai.vercel.app
+      - key: FRONTEND_URL
+        sync: false
+
+      # LLM providers
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY_1
+        sync: false
+      - key: GROQ_API_KEY_2
+        sync: false
+      - key: GROQ_API_KEY_3
+        sync: false
+      - key: OPENROUTER_API_KEY_1
+        sync: false
+      - key: OPENROUTER_API_KEY_2
+        sync: false
+      - key: OPENROUTER_API_KEY_3
+        sync: false
+      - key: NVIDIA_API_KEY_1
+        sync: false
+      - key: NVIDIA_API_KEY_2
+        sync: false
+
+      # Market data
+      - key: FRED_API_KEY
+        sync: false
+
+      # Tracing (optional)
+      - key: LANGSMITH_API_KEY
+        sync: false
+      - key: LANGSMITH_PROJECT
+        value: finsight-ai
+
+      # App secret (generate: python -c "import secrets; print(secrets.token_hex(32))")
+      - key: SECRET_KEY
+        sync: false
