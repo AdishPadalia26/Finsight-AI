@@ -109,25 +109,45 @@ export function streamAnalysis(
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let sawTerminal = false;
+
+      const dispatch = (frame: string) => {
+        const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+        if (!dataLine) return;
+        try {
+          const evt = JSON.parse(dataLine.slice(dataLine.indexOf(":") + 1).trim()) as SSEEvent;
+          if (evt.event === "pipeline_complete" || evt.event === "pipeline_error") {
+            sawTerminal = true;
+          }
+          onEvent(evt);
+        } catch {
+          // skip malformed SSE frame
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split("\n\n");
-        buffer = chunks.pop() ?? "";
-        for (const chunk of chunks) {
-          const dataLine = chunk
-            .split("\n")
-            .find((l) => l.startsWith("data: "));
-          if (dataLine) {
-            try {
-              onEvent(JSON.parse(dataLine.slice(6)) as SSEEvent);
-            } catch {
-              // skip malformed SSE frame
-            }
-          }
+        if (value) buffer += decoder.decode(value, { stream: !done });
+
+        // Process every complete "\n\n"-delimited frame currently buffered.
+        let sep: number;
+        while ((sep = buffer.indexOf("\n\n")) !== -1) {
+          dispatch(buffer.slice(0, sep));
+          buffer = buffer.slice(sep + 2);
         }
+
+        if (done) {
+          // Flush a trailing frame that closed without a final blank line —
+          // this is where the large `pipeline_complete` event was being lost.
+          if (buffer.trim()) dispatch(buffer);
+          break;
+        }
+      }
+
+      // Stream closed without a terminal event → surface it instead of hanging
+      // forever on the loading spinner.
+      if (!sawTerminal) {
+        onError("Connection closed before the analysis finished. Please retry.");
       }
     })
     .catch((err) => {
