@@ -104,14 +104,15 @@ async def analyze_stream(request: AnalyzeRequest):
     session_id = initial_state["session_id"]
     log_request(session_id, "stream")
 
-    async def event_stream():
-        yield _sse({
-            "event": "pipeline_start",
-            "session_id": session_id,
-            "total_agents": 12,
-            "built_agents": 12,
-        })
+    # Heartbeat interval (seconds). Agent LLM calls can take minutes with no SSE
+    # output; without periodic bytes, proxies (Cloudflare/Render, nginx) drop the
+    # idle connection and the client sees the stream "close" mid-analysis.
+    HEARTBEAT_SECONDS = 15
+    _DONE = object()
 
+    async def _run_pipeline(queue: "asyncio.Queue") -> None:
+        """Drives the graph, pushing SSE frames onto the queue. Runs concurrently
+        with the heartbeat loop in event_stream()."""
         # Accumulate state as each node completes — avoids double pipeline execution
         state_accumulator: dict = dict(initial_state)
 
@@ -140,58 +141,84 @@ async def analyze_stream(request: AnalyzeRequest):
                     if node_name == "tier2_entry" and isinstance(output, dict):
                         revision = output.get("revision_count", 0)
                         if revision > 0:
-                            yield _sse({
+                            await queue.put(_sse({
                                 "event":           "revision_loop",
                                 "revision_number":  revision,
                                 "message":         f"Critic requested revision #{revision} — re-running planning agents",
-                            })
+                            }))
                         continue
 
                     if label is None:
                         continue
 
                     safe_output = _safe_output_summary(node_name, output)
-                    yield _sse({
+                    await queue.put(_sse({
                         "event":   "agent_complete",
                         "agent":   node_name,
                         "label":   label,
                         "status":  "complete",
                         "summary": safe_output,
-                    })
+                    }))
 
                 elif event_type == "on_chain_start":
                     if label is None:
                         continue
-                    yield _sse({
+                    await queue.put(_sse({
                         "event":  "agent_start",
                         "agent":  node_name,
                         "label":  label,
                         "status": "running",
-                    })
+                    }))
 
                 elif event_type == "on_chain_error":
                     error_msg = str(event.get("data", {}).get("error", "Unknown error"))
-                    yield _sse({
+                    await queue.put(_sse({
                         "event":   "pipeline_error",
                         "agent":   node_name,
                         "message": error_msg[:300],
-                    })
+                    }))
                     return
 
             # Pipeline completed — emit final report from accumulated state
-            yield _sse({
+            await queue.put(_sse({
                 "event":            "pipeline_complete",
                 "session_id":       session_id,
                 "final_report":     state_accumulator.get("final_report"),
                 "compliance_audit": state_accumulator.get("compliance_audit"),
                 "critic_scores":    state_accumulator.get("critic_scores"),
                 "pipeline_errors":  state_accumulator.get("pipeline_errors") or [],
-            })
+            }))
 
         except ValueError as e:
-            yield _sse({"event": "pipeline_error", "message": str(e)[:200]})
+            await queue.put(_sse({"event": "pipeline_error", "message": str(e)[:200]}))
         except Exception as e:
-            yield _sse({"event": "pipeline_error", "message": f"Unexpected error: {str(e)[:200]}"})
+            await queue.put(_sse({"event": "pipeline_error", "message": f"Unexpected error: {str(e)[:200]}"}))
+
+    async def event_stream():
+        yield _sse({
+            "event": "pipeline_start",
+            "session_id": session_id,
+            "total_agents": 12,
+            "built_agents": 12,
+        })
+
+        queue: asyncio.Queue = asyncio.Queue()
+        producer = asyncio.create_task(_run_pipeline(queue))
+        try:
+            while True:
+                try:
+                    frame = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_SECONDS)
+                except asyncio.TimeoutError:
+                    # SSE comment line — ignored by EventSource/parsers, but the
+                    # bytes keep the proxy connection alive during long agent runs.
+                    yield ": keepalive\n\n"
+                    continue
+                yield frame
+                # Stop once the pipeline signals completion or a fatal error.
+                if '"event": "pipeline_complete"' in frame or '"event": "pipeline_error"' in frame:
+                    break
+        finally:
+            producer.cancel()
 
     return StreamingResponse(
         event_stream(),

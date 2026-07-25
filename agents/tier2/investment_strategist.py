@@ -53,7 +53,7 @@ class InvestmentStrategistAgent(BaseAgent):
     MODEL_ID = "openai/gpt-oss-120b:free"
     API_KEY_VAR = "OPENROUTER_API_KEY_2"
     FALLBACK_PROVIDER = "nvidia"
-    FALLBACK_MODEL_ID = "meta/llama-3.3-70b-instruct"
+    FALLBACK_MODEL_ID = "moonshotai/kimi-k2.6"
     FALLBACK_API_KEY_VAR = "NVIDIA_API_KEY_1"
 
     def __init__(self):

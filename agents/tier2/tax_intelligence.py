@@ -82,7 +82,7 @@ class TaxIntelligenceAgent(BaseAgent):
 
     MODEL_TYPE = "reasoning"
     PROVIDER = "openrouter"
-    MODEL_ID = "deepseek/deepseek-v4-flash:free"
+    MODEL_ID = "google/gemma-4-31b-it:free"
     API_KEY_VAR = "OPENROUTER_API_KEY_3"
     FALLBACK_PROVIDER = "gemini"
     FALLBACK_MODEL_ID = "gemini-2.5-flash"

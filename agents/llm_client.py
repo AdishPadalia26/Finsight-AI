@@ -170,7 +170,9 @@ def _call_nvidia(
                         print(f"[llm_client] NVIDIA {model} rate-limited, waiting {wait:.0f}s")
                         time.sleep(wait)
                         continue
-                    elif status in (400, 422):
+                    elif status in (400, 404, 422):
+                        # 404 = model not provisioned for this account — retrying
+                        # won't help, so skip straight to the next NVIDIA model.
                         print(f"[llm_client] NVIDIA {model} {status} — trying next model")
                         break
                     else:
@@ -290,7 +292,7 @@ def _call_openrouter(
                     print(f"[llm_client] OpenRouter {model_id} rate-limited, waiting {wait:.0f}s")
                     time.sleep(wait)
                     continue
-                elif status in (400, 422):
+                elif status in (400, 404, 422):
                     print(f"[llm_client] OpenRouter {model_id} {status} — skipping")
                     return None
                 else:

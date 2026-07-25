@@ -43,7 +43,7 @@ class GoalEngineeringAgent(BaseAgent):
 
     MODEL_TYPE = "reasoning"
     PROVIDER = "nvidia"
-    MODEL_ID = "meta/llama-3.3-70b-instruct"
+    MODEL_ID = "moonshotai/kimi-k2.6"
     API_KEY_VAR = "NVIDIA_API_KEY_2"
     FALLBACK_PROVIDER = "groq"
     FALLBACK_MODEL_ID = "llama-3.3-70b-versatile"
