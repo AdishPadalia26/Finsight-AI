@@ -1,6 +1,6 @@
 # FinSight AI
 
-Multi-agent financial intelligence platform for the Wipro Junior FDE Pre-screening Assignment.
+Multi-agent financial intelligence platform for personal finance analysis.
 
 FinSight AI is a live, GCP-deployed financial intelligence application that analyzes a user financial profile through a coordinated LangGraph workflow. It combines specialized agents, deterministic financial calculations, multi-provider LLM routing, red-team review, and compliance guardrails to produce a personalized financial analysis that is explainable, auditable, and safety-aware.
 
@@ -879,9 +879,9 @@ The guiding principle should remain the same: LLMs assist with reasoning and com
 
 ---
 
-## Assignment Mapping
+## Capability Mapping
 
-| Wipro Requirement | Where FinSight AI Addresses It |
+| Capability | Where FinSight AI Addresses It |
 |---|---|
 | Multi-Agent Architecture | 12-agent LangGraph workflow across Data Intelligence, Financial Planning, and Intelligence/Safety tiers |
 | Agent Responsibilities | Each agent has a scoped role, input context, and output contract |
@@ -897,5 +897,4 @@ The guiding principle should remain the same: LLMs assist with reasoning and com
 
 ## License and Use
 
-This project was built for the Wipro Junior FDE Pre-screening Assignment. It is intended as an educational demonstration of multi-agent system design, responsible LLM usage, and cloud-deployed AI application engineering.
-
+This project is an educational demonstration of multi-agent system design, responsible LLM usage, and cloud-deployed AI application engineering.
