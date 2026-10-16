@@ -29,6 +29,7 @@ FinSight AI is a live, GCP-deployed financial intelligence application that anal
 - [Observability](#observability)
 - [Troubleshooting](#troubleshooting)
 - [Future Work](#future-work)
+- [Technical Report (PDF)](docs/FinSight_AI_Technical_Report.pdf)
 
 ---
 
