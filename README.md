@@ -4,6 +4,8 @@ Multi-agent financial intelligence platform for personal finance analysis.
 
 FinSight AI is a live, GCP-deployed financial intelligence application that analyzes a user financial profile through a coordinated LangGraph workflow. It combines specialized agents, deterministic financial calculations, multi-provider LLM routing, red-team review, and compliance guardrails to produce a personalized financial analysis that is explainable, auditable, and safety-aware.
 
+**Technical Report:** [FinSight AI Technical Report (PDF)](docs/FinSight_AI_Technical_Report.pdf)
+
 > Disclaimer: FinSight AI is a demonstration project. It provides educational analysis only and does not provide licensed financial, tax, legal, or investment advice.
 
 ---
@@ -132,6 +134,8 @@ The pipeline view shows the LangGraph workflow running across the agent tiers, i
 ## Architecture Overview
 
 FinSight AI is built as a full-stack multi-agent application.
+
+![FinSight AI software architecture](docs/Software%20Architecture.png)
 
 | Layer | Technology |
 |---|---|
